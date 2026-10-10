@@ -3,6 +3,9 @@ import binascii
 import hashlib
 import struct
 
+NAME = 'z30'
+MODEL = 'Nikon Z30'
+FIRMWARE = 'C 1.20'
 BASE = 0x10020000
 STOCK_SHA256 = '8a99ced2d8220729ba067587b0624bf30c81757abc5d728768134b1c7fd457fa'
 STOCK_SIZE = 33939514

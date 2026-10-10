@@ -49,3 +49,13 @@ python tools/prepare_wav.py input.wav SHUTTER.WAV
 除声音实现的四个文件外，本项目原创代码与文档采用 [MIT](LICENSE)。声音实现采用 [Wonder Lantern Community License](licenses/Wonder-Lantern.txt)，包含免费分发等条件；使用或分发组合代码时须同时遵守相应条款。
 
 本项目与 Nikon、Wonder-Lantern 无隶属关系。许可证不授予 Nikon 固件、原厂资源或商标的权利。
+
+## Nikon Z7 C 3.80 support
+
+The same container decoder and patch framework now also support the Nikon Z7
+C 3.80 `Z_7_0380.bin` upgrade container.  The `liveview-dual`, `m900` and
+`shutter-sound` presets are ported, and `full` combines all three.
+
+See [docs/z7-port.md](docs/z7-port.md) for fingerprints, mappings, build
+commands and verification details.  Z7 stores the WAV on its CFexpress/XQD
+card using the firmware path `A:\SHUTTER.WAV` (or `A:\SHUTTER\N.WAV`).

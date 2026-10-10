@@ -1,4 +1,4 @@
-"""Optional native gate execution. Requires caller's stock EG file and Unicorn.
+"""Optional native gate execution. Requires caller's stock EG/MAIN file and Unicorn.
 
 Stops at the native accept/reject continuation, before downstream drawing or
 eligibility services. Snapshot and stack RAM are synthetic; no hardware I/O.
@@ -8,29 +8,44 @@ import json
 import struct
 from pathlib import Path
 
-from z30_extensions.features.liveview_dual import HOOKS, SNAPSHOT
+from z30_extensions.features.liveview_dual import SPECS
 from z30_extensions.build import build
-from z30_extensions.platform.z30_120 import BASE
 from z30_extensions.container import extract_eg
 
 
-def verify(source, preset='liveview-dual'):
+def _hooks(model, spec):
+    if model == 'z30':
+        return (
+            (spec['gate'], spec['gate_expected'], True, 0x1044FF7E, 0x1044FFA4),
+            (spec['widget_gate'], spec['widget_expected'], False, 0x1036E8BC, 0x1036E8C4),
+        )
+    if model == 'z7':
+        return (
+            (spec['gate'], spec['gate_expected'], True, 0x103EBB7A, 0x103EBBA0),
+            (spec['widget_gate'], spec['widget_expected'], False, 0x1036D594, 0x1036D59C),
+        )
+    raise ValueError('Unknown model')
+
+
+def verify(source, preset='liveview-dual', model='z30'):
     from unicorn import Uc, UC_ARCH_ARM, UC_MODE_THUMB, UC_HOOK_CODE
     from unicorn.arm_const import (UC_CPU_ARM_CORTEX_A15, UC_ARM_REG_R0,
                                    UC_ARM_REG_R4, UC_ARM_REG_SP, UC_ARM_REG_LR)
-    candidate, report = build(source, preset)
+    spec = SPECS[model]
+    platform = spec['platform']
+    candidate, report = build(source, preset, model=model)
     count = 0
     stack = 0x50000000
     initial_sp = stack + 0x800
     saved_r4, saved_lr = 0x12345678, stack + 0x101
-    for site, _, prologue, yes, no in HOOKS:
+    for site, _, prologue, yes, no in _hooks(model, spec):
         results = []
         for image in (source, candidate):
             u = Uc(UC_ARCH_ARM, UC_MODE_THUMB)
             u.ctl_set_cpu_model(UC_CPU_ARM_CORTEX_A15)
-            u.mem_map(BASE, (len(image) + 4095) & ~4095)
-            u.mem_write(BASE, image)
-            u.mem_map(SNAPSHOT & ~4095, 4096)
+            u.mem_map(platform.BASE, (len(image) + 4095) & ~4095)
+            u.mem_write(platform.BASE, image)
+            u.mem_map(spec['snapshot'] & ~4095, 4096)
             u.mem_map(stack, 4096)
             hit = []
 
@@ -43,8 +58,9 @@ def verify(source, preset='liveview-dual'):
             image_results = []
             for disp in range(256):
                 hit.clear()
-                u.mem_write(SNAPSHOT + 0x196, bytes([disp]))
-                u.reg_write(UC_ARM_REG_R0, SNAPSHOT)
+                u.mem_write(spec['snapshot'] + 0x18A if model == 'z7' else spec['snapshot'] + 0x196,
+                            bytes([disp]))
+                u.reg_write(UC_ARM_REG_R0, spec['snapshot'])
                 u.reg_write(UC_ARM_REG_R4, saved_r4)
                 u.reg_write(UC_ARM_REG_SP, initial_sp)
                 u.reg_write(UC_ARM_REG_LR, saved_lr)
@@ -68,7 +84,7 @@ def verify(source, preset='liveview-dual'):
                 raise ValueError('Unexpected original gate behavior')
             if results[1][disp] != (yes if disp in (2, 3) else no):
                 raise ValueError('Unexpected patched gate behavior')
-    return {'feature': 'liveview_dual', 'candidate_sha256': report['sha256'],
+    return {'feature': 'liveview_dual', 'model': model, 'candidate_sha256': report['sha256'],
             'gate_executions': count, 'passed': True,
             'scope': 'Two stock and patched gate windows, 256 DISP values, stack/R4/LR.',
             'limitations': 'Synthetic RAM; stops before native downstream eligibility, drawing and hardware.'}
@@ -78,11 +94,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--extracted-eg', action='store_true')
+    parser.add_argument('--model', choices=['z30', 'z7'], default='z30')
     parser.add_argument('--preset', choices=['liveview-dual', 'full'], default='liveview-dual')
     args = parser.parse_args()
     supplied = args.source.read_bytes()
     source = supplied if args.extracted_eg else extract_eg(supplied)
-    print(json.dumps(verify(source, args.preset), indent=2))
+    print(json.dumps(verify(source, args.preset, args.model), indent=2))
 
 
 if __name__ == '__main__':

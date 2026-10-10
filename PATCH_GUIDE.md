@@ -36,3 +36,9 @@ python patch.py --source "Z_30_0120.bin" --output "output/EG209020.BIN"
 - **Output or report already exists**：移走 output 中之前生成的 BIN 和 JSON，再运行；程序不会覆盖旧文件。
 
 这是实验性固件修改，离线检查不保证所有相机行为。
+
+## Nikon Z7 C 3.80
+
+Z7 C 3.80 (`Z_7_0380.bin`) is also supported for `liveview-dual`, `m900`,
+`shutter-sound` and `full`.  See [docs/z7-port.md](docs/z7-port.md) for the
+exact commands and output notes.
