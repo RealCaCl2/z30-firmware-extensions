@@ -11,6 +11,9 @@ SIMPLIFIED, TRADITIONAL = 26, 27
 # choose the stock Hans font 2 / Hant font 0 in the runtime style copy.
 UNICODE_STYLE = 120
 TRANSLATIONS = {
+    'Photo aspect (trial)': ('照片画幅 实验', '照片畫幅 實驗'),
+    'Photo aspect': ('照片画幅', '照片畫幅'),
+    'OFF (stock)': ('关闭', '關閉'),
     'Video bitrate': ('视频码率', '影片位元率'),
     'Stock': ('原始', '原始'),
     'Balanced': ('均衡', '均衡'),

@@ -12,12 +12,19 @@ from z30_extensions.build import build
 from z30_extensions.features.sound_layout import *
 
 class Fixture(Context):
- def __init__(self,stock,image,report,files,short_write=False,close_error=False,initialize=True):
+ def __init__(self,stock,image,report,files,short_write=False,close_error=False,initialize=True,properties=None):
   super().__init__(stock,image)
   self.f={k:int(v,16) for k,v in report['features']['shutter_sound']['functions'].items()}
   self.files=files;self.opened={};self.fd=3;self.alloc=RAM+0x10000;self.short_write=short_write;self.close_error=close_error
   self.calls=[]
   for a in (0x10211f4c,0x103382a2,0x10338414,0x102c8a6a,0x1033832e,0x102c89ee):self.u.hook_add(UC_HOOK_CODE,self.service,begin=a,end=a)
+  if properties is not None:
+   def property_api(u,a,n,d):
+    key=u.reg_read(UC_ARM_REG_R0)
+    if a==0x10465990:properties[key]=u.reg_read(UC_ARM_REG_R1);value=1
+    else:value=properties.get(key,0)
+    self.ret(value)
+   for a in (0x10465984,0x10465990,0x101993de):self.u.hook_add(UC_HOOK_CODE,property_api,begin=a,end=a)
   self.state=self.call(self.f['ensure']) if initialize else 0
  def word(self,off):return int.from_bytes(self.u.mem_read(self.state+off,4),'little')
  def set(self,off,value):self.u.mem_write(self.state+off,struct.pack('<I',value))

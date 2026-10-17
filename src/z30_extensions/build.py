@@ -6,11 +6,11 @@ from .platform.z30_120 import BASE
 
 
 PRESETS = ('full', 'liveview-dual', 'shutter-sound', 'm900', 'mtp-fast', 'module-host', 'video-rot',
-           'bitrate-slowmo-uncap')
+           'bitrate-slowmo-uncap', 'aspect-profiles')
 LEGACY_PRESETS = ('modular',)
 FEATURE_ORDER = ('liveview-dual', 'm900', 'shutter-sound', 'mtp-fast', 'module-host', 'video-rot',
-                 'bitrate-slowmo-uncap')
-FULL_FEATURES = FEATURE_ORDER
+                 'bitrate-slowmo-uncap', 'aspect-profiles')
+FULL_FEATURES = tuple(f for f in FEATURE_ORDER if f != 'aspect-profiles')
 MODULAR_FEATURES = ('liveview-dual', 'm900', 'shutter-sound', 'module-host')
 
 
@@ -30,13 +30,15 @@ def resolve_presets(preset='full'):
         else:
             features.add(name)
     # Module host and bitrate profiles share the sound menu/state framework.
-    if 'module-host' in features or 'bitrate-slowmo-uncap' in features:
+    if any(f in features for f in ('module-host', 'bitrate-slowmo-uncap', 'aspect-profiles')):
         features.add('shutter-sound')
     return list(dict.fromkeys(selected)), [f for f in FEATURE_ORDER if f in features]
 
 
-def build(source, preset='full'):
+def build(source, preset='full', *, aspect_trace=False):
     selected, features = resolve_presets(preset)
+    if aspect_trace and 'aspect-profiles' not in features:
+        raise ValueError('Aspect trace requires aspect-profiles')
     if features == ['liveview-dual']:
         output, report = build_dual(source)
         report.update(preset=selected[0] if len(selected) == 1 else selected,
@@ -54,7 +56,8 @@ def build(source, preset='full'):
         add(plan)
     if 'shutter-sound' in features:
         from .features.shutter_sound import add
-        add(plan, modules='module-host' in features, bitrate='bitrate-slowmo-uncap' in features)
+        add(plan, modules='module-host' in features, bitrate='bitrate-slowmo-uncap' in features,
+            aspect='aspect-profiles' in features, aspect_trace=aspect_trace)
     if 'mtp-fast' in features:
         from .features.mtp_fast import add
         add(plan)

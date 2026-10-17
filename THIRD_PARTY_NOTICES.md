@@ -10,6 +10,8 @@
 - `src/z30_extensions/features/sound_layout.py`
 - `src/z30_extensions/features/sound_settings.py`
 - `src/z30_extensions/features/bitrate_ui.py`
+- `src/z30_extensions/features/aspect_ui.py`
+- `src/z30_extensions/features/aspect_trace.py`
 - `src/z30_extensions/features/ui_text.py`
 
 上述文件采用 [Wonder Lantern Community License](licenses/Wonder-Lantern.txt)。该许可证允许使用、修改和免费分发，禁止收费分发，并要求公开分发的修改版本提供同许可证源码。完整条件以随附许可证为准。由于包含收费分发限制，该部分不是 OSI 意义上的开放源代码许可。

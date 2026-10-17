@@ -5,7 +5,7 @@
 from .sound_layout import *
 from ..assembly import constant, invoke
 
-def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_table, template, child_templates, extension=None, sidebar_parent=None, video=None):
+def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_table, template, child_templates, extension=None, sidebar_parent=None, video=None, aspect=None):
     code = {}
     allocation_size = NEW_SIZE
     module_copy = module_labels = getter_check = getter_result = route_extra = route_action = action_extra = ''
@@ -41,6 +41,22 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
         route_action = f"""ldrh r2,[r4,#2];{constant('r12',bu.PAGE_INDEX)}cmp r2,r12;bne not_bitrate;
             {invoke(f['bitrate_action'])}b action_done;not_bitrate:""" + route_action
         action_extra = f"cmp r5,#{video['root_row']};bne not_bitrate_root;{invoke(f['bitrate_open'])}b done;not_bitrate_root:" + action_extra
+    if aspect:
+        from . import aspect_ui as au
+        allocation_size = aspect['allocation_size']
+        video_copy += f"""{constant('r5',aspect['page_offset'])}add r5,r4,r5;mov r0,r5;
+            {constant('r1',aspect['template'])}movs r2,#44;{invoke(0x10199bdc,thumb=False)}
+            add r0,r4,#{PAGE_OFFSET};str r0,[r5,#4];
+            {constant('r5',aspect['state_offset'])}add r5,r4,r5;mvn r0,#0;str r0,[r5,#4];"""
+        video_restore += invoke(f['aspect_restore']) + invoke(f['aspect_sync'])
+        video_labels += invoke(f['aspect_labels'])
+        getter_check += f"{constant('r12',au.PAGE_INDEX)}cmp r1,r12;beq aspect_page;"
+        getter_result += f"""aspect_page:push {{r1-r3,lr}};{invoke(f['get'])}cmp r0,#0;beq ret;
+            {constant('r2',aspect['page_offset'])}b add_page;"""
+        route_extra += f"beq owned;{constant('r2',aspect['page_offset'])}add r2,r0,r2;cmp r4,r2;"
+        route_action = f"""ldrh r2,[r4,#2];{constant('r12',au.PAGE_INDEX)}cmp r2,r12;bne not_aspect;
+            {invoke(f['aspect_action'])}b action_done;not_aspect:""" + route_action
+        action_extra = f"cmp r5,#{aspect['root_row']};bne not_aspect_root;{invoke(f['aspect_open'])}b done;not_aspect_root:" + action_extra
     c = constant
     def call(name): return invoke(f[name])
     native = lambda address: invoke(address, thumb=address != 0x10199bdc)

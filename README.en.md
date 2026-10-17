@@ -20,6 +20,8 @@ The project applies patches with expected-byte checks to user-supplied stock fir
 | `video-rot` | Write orientation metadata for new recordings and lock the orientation captured at recording start. |
 | `bitrate-slowmo-uncap` | Select and remember Stock, Balanced, or High quality bitrates; extend slow-motion recording to 25 minutes with FAT32 splitting or large exFAT files. |
 
+The separate opt-in [`aspect-profiles`](docs/aspect-profiles.md) experiment adds six photo ratios in one native menu and a stock-grid reference-frame prototype. It is excluded from `full`; the user confirmed correct 4:3 and 5:4 image proportions on camera with v8. Full capture-mode and live-view coverage remains unverified.
+
 Sound and module menus support Simplified Chinese, Traditional Chinese, and English fallback. Current builds do not add a Camera Status page.
 
 ## Quick start

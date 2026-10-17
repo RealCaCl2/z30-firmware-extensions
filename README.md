@@ -20,6 +20,8 @@ Wonder Lantern Z30 是 WonderLantern 组织面向 **Nikon Z30 C 1.20** 的实验
 | `video-rot` | 为新录像写入方向元数据，锁定开始录制时的方向。 |
 | `bitrate-slowmo-uncap` | 机内选择原始、均衡、高质量码率并记忆；慢动作录制上限 25 分钟，支持 FAT32 分段或 exFAT 大文件。 |
 
+另有显式选择的实验预设 [`aspect-profiles`](docs/aspect-profiles.md)：同一菜单切换六种照片比例，提供原厂网格参考框实验。它不包含在 `full` 中，v8 的 4:3、5:4 主图比例已获用户实机确认，全部拍摄模式与取景边界仍未验收。
+
 声音与模块菜单支持简体中文、繁体中文和英文回退。当前构建不增加 Camera Status 页面。
 
 ## 快速开始

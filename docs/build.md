@@ -4,6 +4,8 @@
 
 ## 运行
 
+新增的 `aspect-profiles` 为显式实验项，默认 full 不启用。其菜单、参考框、构建、v8 实机反馈与剩余验收范围见[多画幅说明](aspect-profiles.md)。
+
 需要 Python 3.10+。声音功能和 `mtp-fast` 需要 Keystone，首次安装依赖；固件不需要手动解包：
 
 ```powershell

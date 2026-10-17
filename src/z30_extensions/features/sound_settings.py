@@ -15,7 +15,7 @@ from ..assembly import constant, invoke
 def settings_code(f, path, *, state_get='get', close='settings_close',
                   magic=CONFIG_MAGIC, enabled_offset=ENABLED, selected_offset=SELECTED,
                   fd_offset=SETTINGS_FD, enabled_max=1, selected_max=4,
-                  load_sound=True):
+                  load_sound=True, restore_enabled=False):
     """Emit a checked SD record; optional layout supports independent video state."""
     CONFIG_MAGIC, ENABLED, SELECTED, SETTINGS_FD = magic, enabled_offset, selected_offset, fd_offset
     c = constant
@@ -27,7 +27,7 @@ def settings_code(f, path, *, state_get='get', close='settings_close',
                       f"{invoke(f['get'])}movs r1,#8;str r1,[r0,#{RESULT}];")
     restore = (f'''str r6,[r4,#{SELECTED}];cmp r5,#0;beq done;
         mov r0,r6;{call('load')}cmp r0,#1;bne done;str r5,[r4,#{ENABLED}];b done;'''
-        if load_sound else f'str r6,[r4,#{SELECTED}];b done;')
+        if load_sound else (f'str r5,[r4,#{ENABLED}];' if restore_enabled else '') + f'str r6,[r4,#{SELECTED}];b done;')
     initialize = f"""
         mov r0,sp;movs r1,#48;{n(0x10199c40)}
         mvn r0,#0;str r0,[sp,#8];mov r0,sp;{c('r1',path)}{n(0x1033829e)}

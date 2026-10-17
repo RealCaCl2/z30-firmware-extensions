@@ -10,6 +10,12 @@ from z30_extensions.cli import choose_presets, main
 
 
 class PresetTests(unittest.TestCase):
+    def test_aspect_profiles_is_explicit_and_keeps_full_stable(self):
+        self.assertIn('aspect-profiles', PRESETS)
+        self.assertNotIn('aspect-profiles', resolve_presets('full')[1])
+        self.assertEqual(resolve_presets('aspect-profiles')[1], ['shutter-sound', 'aspect-profiles'])
+        self.assertEqual(resolve_presets(['aspect-profiles','full'])[1],
+                         resolve_presets('full')[1]+['aspect-profiles'])
     def test_module_host_selection_builds_its_required_framework(self):
         self.assertEqual(PRESETS[5], 'module-host')
         self.assertNotIn('modular', PRESETS)
