@@ -12,7 +12,7 @@ The project applies patches with expected-byte checks to user-supplied stock fir
 
 | Preset | Feature |
 | --- | --- |
-| `liveview-dual` | Display the histogram and level together, retaining stock DISP mode conditions and ordering. |
+| `liveview-dual` | Keep existing DISP pages and insert a full-information page (top information, histogram and level) after the horizon page. [Details](docs/liveview-full-info.md) |
 | `shutter-sound` | Read a custom electronic-shutter WAV from SD, with enable/disable, selection, preview, and reload. |
 | `m900` | Enable the existing stock M-mode extended-exposure path, up to 900 seconds, retaining the M-mode check. |
 | `mtp-fast` | Accelerate MTP property-list queries while preserving response semantics. |
@@ -48,7 +48,7 @@ New-Item -ItemType Directory -Force output | Out-Null
 python patch.py --source "Z_30_0120.bin" --output "output/EG209020.BIN"
 ```
 
-`.[sound]` installs the Keystone assembler required by `full`. Standalone `liveview-dual` and `m900` builds need only the Python standard library. Sound, the module host, bitrate profiles, and MTP acceleration require Keystone. The bitrate preset includes the sound-menu framework, with sound disabled by default. For standalone video orientation, `.[video]` provides the same assembler dependency as `.[sound]`.
+`.[sound]` installs the Keystone assembler required by `full`. The additional `liveview-dual` DISP page also requires Keystone. Standalone `m900` needs only the Python standard library. Sound, the module host, bitrate profiles, and MTP acceleration require Keystone. The bitrate preset includes the sound-menu framework, with sound disabled by default. For standalone video orientation, `.[video]` provides the same assembler dependency as `.[sound]`.
 
 ### 3. Select presets
 

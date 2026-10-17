@@ -66,7 +66,7 @@ def verify(source, preset='liveview-dual'):
         for disp in range(256):
             if results[0][disp] != (yes if disp == 2 else no):
                 raise ValueError('Unexpected original gate behavior')
-            if results[1][disp] != (yes if disp in (2, 3) else no):
+            if results[1][disp] != (yes if disp in (2, 3, 5) else no):
                 raise ValueError('Unexpected patched gate behavior')
     return {'feature': 'liveview_dual', 'candidate_sha256': report['sha256'],
             'gate_executions': count, 'passed': True,

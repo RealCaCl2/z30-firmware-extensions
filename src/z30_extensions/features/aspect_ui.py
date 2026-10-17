@@ -55,7 +55,7 @@ def prepare(plan, f, resources, allocation_size, *, trace=False):
         f[key] = plan.alloc(bytes(size))
     page_offset, state_offset = allocation_size, allocation_size + 44
     strings = {k: resources.alloc(v) for k, v in
-               dict(title='Photo aspect (trial)', root='Photo aspect', empty='', mark='*').items()}
+               dict(title='Photo aspect', root='Photo aspect', empty='', mark='*').items()}
     labels = plan.alloc(struct.pack('<7I', *(resources.alloc(v) for v in NAMES)))
     copies = []
     geometries = [(0, 0, 5568, 3712)]

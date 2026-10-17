@@ -27,6 +27,8 @@ def gate_code(address, prologue, yes, no):
     a.branch(0, 'accepted')
     a.emit('0328')
     a.branch(0, 'accepted')
+    a.emit('0528')
+    a.branch(0, 'accepted')
     a.load(3, 'no', no | 1)
     a.emit('1847')
     a.label('accepted')
@@ -62,6 +64,8 @@ def build(source):
     mask_address = stock.rom(HISTOGRAM + 4, 36)
     edits.append(Edit(mask_address - BASE, struct.pack('<9I', *([0x444] * 9)),
                       struct.pack('<9I', *([0xCCC] * 9)), 'Histogram visibility masks'))
+    from .liveview_full_info import add as add_full_info
+    full_info_hooks = add_full_info(stock, append, edits)
     output, report = apply_patch(source, edits, append, expected_sha256=STOCK_SHA256,
                                  base=BASE, capacity=CAPACITY)
     for address, expected in VIDEO_STOCK_WINDOWS:
@@ -69,6 +73,7 @@ def build(source):
             raise ValueError('Video shutter bytes were modified')
     report.update(feature='liveview_dual', model='Nikon Z30', firmware='C 1.20',
                   hooks=hooks, mask_rom_address=hex(mask_address),
+                  full_info_disp=5, full_info_hooks=full_info_hooks,
                   camera_verified=False, video_shutter_stock=True,
                   limitations=[
                       'Offline instruction checks do not verify full camera operation.',

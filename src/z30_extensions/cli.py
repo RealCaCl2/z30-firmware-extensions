@@ -8,7 +8,7 @@ from .container import extract_eg, CONTAINER_SHA256
 
 PRESET_LABELS = {
     'full': '全部七项功能，包含视频方向及实验性 SD 模块宿主',
-    'liveview-dual': '直方图与水平仪同屏',
+    'liveview-dual': '直方图与水平仪同屏，新增全信息 DISP 页',
     'shutter-sound': '自定义电子快门声音',
     'm900': 'M 档 900 秒曝光',
     'mtp-fast': 'MTP 属性列表加速',

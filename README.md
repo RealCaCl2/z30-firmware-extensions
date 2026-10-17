@@ -12,7 +12,7 @@ Wonder Lantern Z30 是 WonderLantern 组织面向 **Nikon Z30 C 1.20** 的实验
 
 | 预设 | 功能 |
 | --- | --- |
-| `liveview-dual` | 直方图与水平仪同屏，保留原厂 DISP 模式条件和显示顺序。 |
+| `liveview-dual` | 保留现有 DISP 页，在水平仪页后增加“顶部信息＋直方图＋水平仪”全信息页。[说明](docs/liveview-full-info.md) |
 | `shutter-sound` | 从 SD 卡读取自定义电子快门 WAV，提供开关、文件选择、预听和重新加载。 |
 | `m900` | 启用原厂已有的 M 档长曝光路径，最长 900 秒，保留 M 档判断。 |
 | `mtp-fast` | 加速 MTP 属性列表查询，保留返回数据语义。 |
@@ -48,7 +48,7 @@ New-Item -ItemType Directory -Force output | Out-Null
 python patch.py --source "Z_30_0120.bin" --output "output/EG209020.BIN"
 ```
 
-`.[sound]` 提供 `full` 所需的 Keystone 汇编依赖。单独构建 `liveview-dual` 或 `m900` 只需要 Python 标准库；声音、模块宿主、码率档位和 MTP 加速需要 Keystone。码率预设自动包含声音菜单框架，但声音默认关闭。单独视频方向可安装 `.[video]`，与 `.[sound]` 提供相同的汇编依赖。
+`.[sound]` 提供 `full` 所需的 Keystone 汇编依赖。`liveview-dual` 新增 DISP 页也需要 Keystone；单独构建 `m900` 只需要 Python 标准库；声音、模块宿主、码率档位和 MTP 加速需要 Keystone。码率预设自动包含声音菜单框架，但声音默认关闭。单独视频方向可安装 `.[video]`，与 `.[sound]` 提供相同的汇编依赖。
 
 ### 3. 选择预设
 

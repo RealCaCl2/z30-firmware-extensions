@@ -58,7 +58,7 @@ python patch.py video-rot --source path/to/Z_30_0120.bin --output output/EG20902
 
 只改新视频的元数据，不改像素或已有文件，播放器需尊重方向矩阵。锁定点是封装对象成功配置时，不是实测的 REC 按钮硬件时间；跨文件分段会创建新对象时重新采样。第二阶段已有横拍、两侧竖拍、录制中方向锁定以及机身/电脑播放的实机反馈；倒置、分段时机及未列出的模式仍需独立验证，具体边界见 [视频方向说明](video-rotation.md)。
 
-单独同屏和 M900 只需要标准库。声音、模块宿主、码率档位和 `mtp-fast` 通过 `.[sound]` 安装 Keystone 汇编，视频方向可使用 `.[video]` 或 `.[sound]`。输出和同名 JSON 必须不存在，程序拒绝覆盖。CLI 通过 Python 运行。
+单独 M900 只需要标准库。同屏新增全信息 DISP 页，需要 Keystone，详见[全信息 DISP 页](liveview-full-info.md)。同屏、声音、模块宿主、码率档位和 `mtp-fast` 通过 `.[sound]` 安装 Keystone 汇编，视频方向可使用 `.[video]` 或 `.[sound]`。输出和同名 JSON 必须不存在，程序拒绝覆盖。CLI 通过 Python 运行。
 
 原始包大小为 34,496,798 字节，SHA-256 为：
 

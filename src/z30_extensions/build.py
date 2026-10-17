@@ -50,7 +50,8 @@ def build(source, preset='full', *, aspect_trace=False):
         plan.tail.extend(dual[len(source) - 2:-2])
         plan.edits.extend(Edit(int(e['offset'], 16), bytes.fromhex(e['expected_hex']),
                               bytes.fromhex(e['replacement_hex']), e['name']) for e in report['edits'])
-        plan.features['liveview_dual'] = {'hooks': report['hooks'], 'mask_rom_address': report['mask_rom_address']}
+        plan.features['liveview_dual'] = {key: report[key] for key in
+                                        ('hooks', 'mask_rom_address', 'full_info_disp', 'full_info_hooks')}
     if 'm900' in features:
         from .features.long_exposure import add
         add(plan)
