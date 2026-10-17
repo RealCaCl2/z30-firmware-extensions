@@ -5,10 +5,12 @@
 Wonder Lantern Z30 is an experimental low-level host and firmware-extension research project by **WonderLantern**, specifically for **Nikon Z30 C 1.20**. It explores camera-side extensions similar to Magic Lantern. The current implementation is a Z30-specific prototype, not a general framework for other cameras. Nikon does not endorse or support this project.
 
 The project applies patches with expected-byte checks to user-supplied stock firmware and produces a standalone **EG module** and a JSON build report. The maintainer has reported installation on a Z30 C 1.20. The builder does not recreate a complete Nikon update package, connect to a camera, or write to an SD card. Feature-specific coverage is listed under Verification status below.
+On 2026-10-17, the user confirmed that all eight current features have passed physical-camera testing on Nikon Z30 C 1.20, including aspect profiles, the full-information page, sound persistence, and runtime bitrate profiles. Earlier pending-camera statements below describe previous validation stages and are superseded by this confirmation. Offline report flags still describe only the tools' own evidence; this confirmation does not claim exhaustive coverage of every mode, combination, or fault condition.
+
 
 ## Features and presets
 
-`full` includes all seven features below. Select features individually or combine them; `module-host` automatically includes `shutter-sound`.
+`full` includes all eight features below. Select features individually or combine them; `module-host` automatically includes `shutter-sound`.
 
 | Preset | Feature |
 | --- | --- |
@@ -19,8 +21,7 @@ The project applies patches with expected-byte checks to user-supplied stock fir
 | `module-host` | **Experimental** native SD module host that loads and runs ZMOD modules using the sound-menu framework. |
 | `video-rot` | Write orientation metadata for new recordings and lock the orientation captured at recording start. |
 | `bitrate-slowmo-uncap` | Select and remember Stock, Balanced, or High quality bitrates; extend slow-motion recording to 25 minutes with FAT32 splitting or large exFAT files. |
-
-The separate opt-in [`aspect-profiles`](docs/aspect-profiles.md) experiment adds six photo ratios in one native menu and a stock-grid reference-frame prototype. It is excluded from `full`; the user confirmed correct 4:3 and 5:4 image proportions on camera with v8. Full capture-mode and live-view coverage remains unverified.
+| `aspect-profiles` | Six photo ratios in one native menu, with a stock-grid reference frame. [Details](docs/aspect-profiles.md) |
 
 Sound and module menus support Simplified Chinese, Traditional Chinese, and English fallback. Current builds do not add a Camera Status page.
 
@@ -52,11 +53,11 @@ python patch.py --source "Z_30_0120.bin" --output "output/EG209020.BIN"
 
 ### 3. Select presets
 
-Omitting presets in an interactive terminal displays a selection menu. Options **1–8** are `full`, followed by the seven presets in the table above. Enter numbers or names separated by spaces or commas; an empty response selects `full`.
+Omitting presets in an interactive terminal displays a selection menu. Options **1–9** are `full`, followed by the eight presets in the table above. Enter numbers or names separated by spaces or commas; an empty response selects `full`.
 
 - `2 4 5` or `liveview-dual,m900,mtp-fast`: combined display, M900, and MTP acceleration.
 - `6` or `module-host`: the experimental module host and its required sound framework.
-- `1` or `full`: all seven features, including orientation and bitrate/slow-motion changes.
+- `1` or `full`: all eight features, including orientation and bitrate/slow-motion changes.
 
 Alternatively, specify presets directly on the command line, separated by spaces:
 
@@ -120,7 +121,7 @@ python tools/prepare_wav.py input.wav SHUTTER.WAV
 
 The converter uses linear interpolation; consider an anti-aliasing resampler first for high-rate audio. Firmware updates do not require replacing your existing WAV files. No third-party audio is included; `example(slot)` in the script generates original synthetic samples.
 
-Sound defaults to OFF without a valid saved record. It plays for silent still-photo captures only when both this feature and stock silent photography are enabled; video and nonsilent photos do not trigger it, and preview works while OFF. Successful file selections and switch changes are saved to `WL-SOUND.CFG` in the SD-card root. After reboot, the previous selection and enabled state are restored on the first menu entry or photo trigger, without opening the menu first. The sound file must remain at its original path; the first photo may incur an extra SD read. Corrupt preferences or a failed startup sound load leave sound OFF. Save failures report that the current setting was not saved. Failed loads preserve the previous valid sample and switch state. Errors appear in a separate message page body while menu titles remain unchanged. The new message page and preferences have instruction-level and assisted QEMU coverage; physical power-cycle and playback validation remain pending. See [sound details](docs/shutter-sound.md).
+Sound defaults to OFF without a valid saved record. It plays for silent still-photo captures only when both this feature and stock silent photography are enabled; video and nonsilent photos do not trigger it, and preview works while OFF. Successful file selections and switch changes are saved to `WL-SOUND.CFG` in the SD-card root. After reboot, the previous selection and enabled state are restored on the first menu entry or photo trigger, without opening the menu first. The sound file must remain at its original path; the first photo may incur an extra SD read. Corrupt preferences or a failed startup sound load leave sound OFF. Save failures report that the current setting was not saved. Failed loads preserve the previous valid sample and switch state. Errors appear in a separate message page body while menu titles remain unchanged. The new message page and preferences have instruction-level and assisted QEMU coverage; the user has also confirmed physical-camera testing. See [sound details](docs/shutter-sound.md).
 
 ## SD module host (experimental)
 

@@ -10,12 +10,12 @@ from z30_extensions.cli import choose_presets, main
 
 
 class PresetTests(unittest.TestCase):
-    def test_aspect_profiles_is_explicit_and_keeps_full_stable(self):
+    def test_aspect_profiles_is_in_full_and_composes_without_duplicates(self):
         self.assertIn('aspect-profiles', PRESETS)
-        self.assertNotIn('aspect-profiles', resolve_presets('full')[1])
+        self.assertIn('aspect-profiles', resolve_presets('full')[1])
         self.assertEqual(resolve_presets('aspect-profiles')[1], ['shutter-sound', 'aspect-profiles'])
         self.assertEqual(resolve_presets(['aspect-profiles','full'])[1],
-                         resolve_presets('full')[1]+['aspect-profiles'])
+                         resolve_presets('full')[1])
     def test_module_host_selection_builds_its_required_framework(self):
         self.assertEqual(PRESETS[5], 'module-host')
         self.assertNotIn('modular', PRESETS)
@@ -32,13 +32,13 @@ class PresetTests(unittest.TestCase):
         selected, features = resolve_presets(['shutter-sound', 'full', 'm900', 'full'])
         self.assertEqual(selected, ['shutter-sound', 'full', 'm900'])
         self.assertEqual(features, ['liveview-dual', 'm900', 'shutter-sound', 'mtp-fast', 'module-host', 'video-rot',
-                          'bitrate-slowmo-uncap'])
+                          'bitrate-slowmo-uncap', 'aspect-profiles'])
         self.assertEqual(resolve_presets(['modular', 'full'])[1], features)
 
     def test_full_enables_all_features_and_modular_keeps_its_scope(self):
         self.assertEqual(resolve_presets('full')[1],
                          ['liveview-dual', 'm900', 'shutter-sound', 'mtp-fast', 'module-host', 'video-rot',
-                          'bitrate-slowmo-uncap'])
+                          'bitrate-slowmo-uncap', 'aspect-profiles'])
         self.assertEqual(resolve_presets('modular')[1],
                          ['liveview-dual', 'm900', 'shutter-sound', 'module-host'])
         self.assertEqual(resolve_presets(['full', 'mtp-fast', 'modular'])[1],
@@ -49,7 +49,7 @@ class PresetTests(unittest.TestCase):
                          ['liveview-dual', 'm900'])
         self.assertEqual(resolve_presets(['mtp-fast', 'full'])[1],
                          ['liveview-dual', 'm900', 'shutter-sound', 'mtp-fast', 'module-host', 'video-rot',
-                          'bitrate-slowmo-uncap'])
+                          'bitrate-slowmo-uncap', 'aspect-profiles'])
 
     def test_invalid_and_empty_selection(self):
         for selection in ([], 'unknown', ['full', 'unknown']):

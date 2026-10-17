@@ -1,10 +1,12 @@
 # 从原始固件包构建功能扩展
 
-当前用户流程只需准备原始 Z30 C 1.20 固件包和本项目 patch 程序。默认 full 包含同屏、自定义电子快门声音、M 档 900 秒曝光、MTP 加速、实验性 SD 模块宿主、视频自动方向和高码率与慢动作扩展，不包含状态页面。
+2026-10-17，用户确认当前全部八项功能均已通过 Nikon Z30 C 1.20 实机检验；下文旧版样片记录保留当时的细分证据范围。
+
+当前用户流程只需准备原始 Z30 C 1.20 固件包和本项目 patch 程序。默认 full 包含同屏、自定义电子快门声音、M 档 900 秒曝光、MTP 加速、实验性 SD 模块宿主、视频自动方向、高码率与慢动作扩展和多画幅，不包含状态页面。
 
 ## 运行
 
-新增的 `aspect-profiles` 为显式实验项，默认 full 不启用。其菜单、参考框、构建、v8 实机反馈与剩余验收范围见[多画幅说明](aspect-profiles.md)。
+`aspect-profiles` 与其他功能预设一样可单独选择，默认 full 已包含。其菜单、参考框、构建与实机记录见[多画幅说明](aspect-profiles.md)。
 
 需要 Python 3.10+。声音功能和 `mtp-fast` 需要 Keystone，首次安装依赖；固件不需要手动解包：
 
@@ -20,7 +22,7 @@ python patch.py --source path/to/Z_30_0120.bin --output output/EG209020.BIN
 python patch.py liveview-dual m900 mtp-fast --source path/to/Z_30_0120.bin --output output/EG209020.BIN
 ```
 
-`full` 展开为全部七项功能：同屏、M900、快门声音、MTP 加速、实验性 SD 模块宿主、视频方向和高码率与慢动作扩展。保留 `modular` 原有范围：同屏、M900、快门声音和实验性 SD 模块宿主；`modular mtp-fast video-rot bitrate-slowmo-uncap` 与 full 启用同一功能集合。`module-host` 仍为实验性功能，菜单及 full 的说明均明确标注。重复功能只应用一次，构建顺序固定，同一功能集合的输出不会随输入顺序改变。报告记录 `selected_presets` 和展开后的 `enabled_features`。
+`full` 展开为全部八项功能：同屏、M900、快门声音、MTP 加速、实验性 SD 模块宿主、视频方向、高码率与慢动作扩展和多画幅。保留 `modular` 原有范围：同屏、M900、快门声音和实验性 SD 模块宿主；`modular mtp-fast video-rot bitrate-slowmo-uncap aspect-profiles` 与 full 启用同一功能集合。`module-host` 仍为实验性功能，菜单及 full 的说明均明确标注。重复功能只应用一次，构建顺序固定，同一功能集合的输出不会随输入顺序改变。报告记录 `selected_presets` 和展开后的 `enabled_features`。
 
 ### 视频码率与慢动作限制
 
@@ -110,6 +112,6 @@ python tools/verify_extended_features.py --source path/to/Z_30_0120.bin
 
 输出为独立 EG 模块，不重建外层 Z_30_0120.bin。固件版本菜单保留原厂 1.20，构建身份通过 JSON 报告的 SHA-256 核对。该模块的机身安装以及 SD 宿主/ZMOD 加载运行已完成实机测试。
 
-默认组合包含同屏、自定义声音、M900、MTP 加速、SD 模块宿主、视频自动方向和高码率与慢动作扩展。900 秒补丁改变扩展标志读取，不写入其保存值；原厂模式判断和曝光路径保留。视频快门窗口在构建后核对为原厂字节。
+默认组合包含同屏、自定义声音、M900、MTP 加速、SD 模块宿主、视频自动方向、高码率与慢动作扩展和多画幅。900 秒补丁改变扩展标志读取，不写入其保存值；原厂模式判断和曝光路径保留。视频快门窗口在构建后核对为原厂字节。
 
 默认 `full` 构建包含 SD 模块宿主，不添加状态页、计数、CFW 版本标记或视频慢快门。离线检查不能保证真实显示、声音或曝光行为。

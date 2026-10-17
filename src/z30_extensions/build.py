@@ -10,7 +10,7 @@ PRESETS = ('full', 'liveview-dual', 'shutter-sound', 'm900', 'mtp-fast', 'module
 LEGACY_PRESETS = ('modular',)
 FEATURE_ORDER = ('liveview-dual', 'm900', 'shutter-sound', 'mtp-fast', 'module-host', 'video-rot',
                  'bitrate-slowmo-uncap', 'aspect-profiles')
-FULL_FEATURES = tuple(f for f in FEATURE_ORDER if f != 'aspect-profiles')
+FULL_FEATURES = FEATURE_ORDER
 MODULAR_FEATURES = ('liveview-dual', 'm900', 'shutter-sound', 'module-host')
 
 

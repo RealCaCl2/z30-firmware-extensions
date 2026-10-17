@@ -15,7 +15,7 @@ PRESET_LABELS = {
     'module-host': '实验性 SD 模块宿主；自动包含快门声音框架',
     'video-rot': '视频自动方向；锁定开始录制时的方向',
     'bitrate-slowmo-uncap': '机内码率档位与记忆；放宽慢动作时长和文件限制',
-    'aspect-profiles': '实验性多画幅菜单与网格参考框；不包含在 full 中',
+    'aspect-profiles': '多画幅菜单与网格参考框',
 }
 
 
