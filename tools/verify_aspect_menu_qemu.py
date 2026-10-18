@@ -81,6 +81,9 @@ def main():
         state=word(int(sound['state_anchor'],16));assert state
         root=state+sound['page_offsets']['955'];page=state+aspect['page_offset']
         root_ids=sound['control_identifiers']['955'];ids=sound['control_identifiers']['961']
+        category=next((c for c in sound.get('menu_categories',[]) if c['key']=='aspect'),None)
+        aspect_row=category['row'] if category else len(root_ids)-1
+        aspect_control=root_ids[aspect_row]
         assert current()==root
         frame('01-root')
         if a.trace_export_only:
@@ -91,7 +94,7 @@ def main():
             write(0xc2525bd4,struct.pack('<I',2))
             write(state+aspect['state_offset'],struct.pack('<I',1))
             s.input(0x1020bfda,[2,2])
-            activate(root,root_ids[-1],len(root_ids)-1);assert current()==page
+            activate(root,aspect_control,aspect_row);assert current()==page
             frame('02-diagnostic-submenu')
             length=aspect['diagnostic_trace']['bytes'];start=fixture['trace_address']
             blob=b''.join(s.remote.memory(start+offset,min(1024,length-offset))
@@ -111,7 +114,7 @@ def main():
         s.input(0x10465990,[0x501,4])
         assert int(s.input(0x10465984,[0x501])['registers']['r0'],16)==4
         for profile in a.profiles:
-            activate(root,root_ids[-1],len(root_ids)-1);assert current()==page
+            activate(root,aspect_control,aspect_row);assert current()==page
             frame(f'02-choices-before-{profile}')
             activate(page,ids[profile],profile);s.run_for(.5)
             assert current()==root,(profile,hex(current()),hex(root))
@@ -131,7 +134,7 @@ def main():
                 # Execute the real hooked selector, then export through normal
                 # submenu entry. This is a diagnostic call, not a camera shot.
                 s.input(0x1020bfda,[area,2])
-            activate(root,root_ids[-1],len(root_ids)-1);assert current()==page
+            activate(root,aspect_control,aspect_row);assert current()==page
             if a.verify_area_sync and profile in (1,2):
                 assert int(s.input(0x10465984,[0x501])['registers']['r0'],16)==2
                 pointer=int(s.input(0x1020bfda,[2,2])['registers']['r0'],16)
@@ -146,6 +149,11 @@ def main():
                               for offset in range(0,length,1024))
                 parsed=decode(blob)
                 assert any(r['event']==1 and r['profile']==profile for r in parsed['records'])
+                if aspect.get('independent_border',{}).get('diagnostic'):
+                    border=next(r['border'] for r in parsed['records'] if r['event']==5 and r['profile']==profile)
+                    assert 'rectangle_channel_disabled' in border and 'grid_updater' in border
+                    s.audit.append({'border_counter_dump_verified':True,'profile':profile,
+                                    'camera_display_verified':False})
                 (s.out/f'trace-{profile}.json').write_text(json.dumps(parsed,indent=2),encoding='utf-8')
                 s.audit.append({'deferred_trace_dump_verified':True,'profile':profile,'bytes':length,
                                 'actual_capture':False})

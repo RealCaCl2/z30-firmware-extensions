@@ -1,11 +1,14 @@
 # Wonder Lantern Z30
 
+> Status (2026-10-18): After the [v42](docs/aspect-lifecycle-v42.md) playback fix, the user reported normal behavior in the camera retest. This confirms the reported issue within that retest; no per-profile or exhaustive lifecycle coverage was supplied. The v37/v40 failures and v41 diagnostic history remain documented.
+
+
 [简体中文](README.md) · **English**
 
 Wonder Lantern Z30 is an experimental low-level host and firmware-extension research project by **WonderLantern**, specifically for **Nikon Z30 C 1.20**. It explores camera-side extensions similar to Magic Lantern. The current implementation is a Z30-specific prototype, not a general framework for other cameras. Nikon does not endorse or support this project.
 
 The project applies patches with expected-byte checks to user-supplied stock firmware and produces a standalone **EG module** and a JSON build report. The maintainer has reported installation on a Z30 C 1.20. The builder does not recreate a complete Nikon update package, connect to a camera, or write to an SD card. Feature-specific coverage is listed under Verification status below.
-On 2026-10-17, the user confirmed that all eight current features have passed physical-camera testing on Nikon Z30 C 1.20, including aspect profiles, the full-information page, sound persistence, and runtime bitrate profiles. Earlier pending-camera statements below describe previous validation stages and are superseded by this confirmation. Offline report flags still describe only the tools' own evidence; this confirmation does not claim exhaustive coverage of every mode, combination, or fault condition.
+The earlier general report of all features working was subsequently corrected by narrow-aspect and playback regressions. Crop, live-view and mask fixes have separate hardware feedback; the latest v42 playback retest was reported normal. Offline checks and camera feedback retain their individual scope.
 
 
 ## Features and presets
@@ -21,9 +24,11 @@ On 2026-10-17, the user confirmed that all eight current features have passed ph
 | `module-host` | **Experimental** native SD module host that loads and runs ZMOD modules using the sound-menu framework. |
 | `video-rot` | Write orientation metadata for new recordings and lock the orientation captured at recording start. |
 | `bitrate-slowmo-uncap` | Select and remember Stock, Balanced, or High quality bitrates; extend slow-motion recording to 25 minutes with FAT32 splitting or large exFAT files. |
-| `aspect-profiles` | Six photo ratios in one native menu, with a stock-grid reference frame. [Details](docs/aspect-profiles.md) |
+| `aspect-profiles` | Six photo ratios and a translucent live-view mask in one preset, preserving the interior stock grid. [Details](docs/aspect-profiles.md) |
 
 Sound and module menus support Simplified Chinese, Traditional Chinese, and English fallback. Current builds do not add a Camera Status page.
+
+`aspect-profiles` combines custom photo crops and a translucent live-view mask in one preset; the default `full` includes it. The mask dims the region outside the selected crop at `128/255` opacity (about 50%), preserving interior grid lines and stock icons. It remains visible with the stock grid off. Selecting OFF restores the preceding stock image area and clears the mask.
 
 ## Quick start
 
@@ -88,7 +93,7 @@ Menus follow the stock **Language** setting. Simplified and Traditional Chinese 
 | Build content | English entry | Simplified Chinese entry | Traditional Chinese entry |
 | --- | --- | --- | --- |
 | Sound framework only | `Shutter sound` | 快门声音 | 快門聲音 |
-| Module host included, such as `full` | `Extensions` | 自定义菜单 | 自訂選單 |
+| Photo, bitrate or module features included, such as `full` | `Extensions` | 自定义菜单 | 自訂選單 |
 | Module page | `SD Modules` | SD 卡功能 | SD 卡功能 |
 
 Fixes cover missing titles, clipping by empty value columns, disappearing sidebars, back-button residue after returning, and corrupted entry labels in non-Chinese languages or on the first menu entry after reboot. The user reported the preceding drawing and language fixes working on hardware; the new message page and preferences still need separate hardware validation. Native QEMU and constructor comparisons are in the [UI verification record](docs/ui-qemu.md).
@@ -97,7 +102,7 @@ WAV filenames, paths, and module output remain ASCII. Stock Chinese fonts contai
 
 ## Custom shutter sound
 
-The entry menu provides enable/disable, file selection, preview, and reload. Selection pages mark the current choice with `*`; press OK once to apply. Selecting a file does not automatically enable sound or play it.
+With photo, video or module features, the root menu is grouped by purpose and these operations live under Shutter sound. Sound-only builds show enable/disable, file selection, preview and reload directly. Selection pages mark the current choice with `*`; press OK once to apply and return to the sound menu. Selecting a file does not automatically enable sound or play it.
 
 Supported SD paths:
 
@@ -164,8 +169,9 @@ Offline results and user hardware reports are separate. Evidence for one preset 
 
 | Scope | Recorded evidence |
 | --- | --- |
-| Builds and regressions | 34 tests passed for the current UI fixes; CRC and byte-for-byte reproducibility passed for `shutter-sound`, `module-host`, and `full`. |
+| Builds and regressions | 53 unit tests and six build combinations passed for this preset integration; see [integration details](docs/aspect-preset-integration.md). Historical CRC and byte-for-byte reproducibility passed for `shutter-sound`, `module-host`, and `full`. |
 | Menus and language | Native QEMU pages/constructors and Unicorn instruction checks; the user reported the preceding drawing/language version working on hardware. New message-page and preferences behavior still needs hardware validation. |
+| Custom aspects and mask | Hardware feedback covers specific capture, live-view, boundary/grid and mask fixes; the latest v42 playback retest was reported normal. See [current details](docs/aspect-profiles.md). |
 | EG installation and SD host | Maintainer confirmation of Z30 C 1.20 installation and ZMOD loading/execution. |
 | Video orientation | Hardware feedback for the standalone preset's orientation and recording-time lock; see the dedicated coverage notes. |
 | MTP acceleration | 590 property-list responses matched stock, with reduced query times; conditions and numbers are in the verification document. |
@@ -191,6 +197,8 @@ Detailed documents are currently mainly in Chinese. The [Chinese README](README.
 | --- | --- |
 | [Build guide](PATCH_GUIDE.md) | Inputs, menu selection, outputs, and common errors. |
 | [Build details](docs/build.md) | Identity, decoding, preset combinations, and patch workflow. |
+| [Custom aspects and translucent mask](docs/aspect-profiles.md) | Six ratios, output dimensions, live-view behavior and evidence boundaries. |
+| [v42 playback fix](docs/aspect-lifecycle-v42.md) | Lifecycle gate, stale-mask retirement and user retest. |
 | [Sound details](docs/shutter-sound.md) | Menus, trigger conditions, format, and state. |
 | [Module documentation](docs/modules.md) | Host operation, ABI 2, examples, and experimental limits. |
 | [Video orientation](docs/video-rotation.md) | Locking, metadata, and hardware records. |
@@ -203,7 +211,7 @@ Detailed documents are currently mainly in Chinese. The [Chinese README](README.
 
 This project belongs to **WonderLantern** and is independent and experimental. Nikon does not endorse or support it.
 
-Original code and documentation use the [MIT License](LICENSE), except for the seven sound/menu implementation files listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): `shutter_sound.py`, `sound_audio.py`, `sound_ui.py`, `sound_layout.py`, `sound_settings.py`, `bitrate_ui.py`, and `ui_text.py`. Those files use the [Wonder Lantern Community License](licenses/Wonder-Lantern.txt).
+Original code and documentation use the [MIT License](LICENSE), except for the sound, menu, aspect and mask implementation files listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Those files use the [Wonder Lantern Community License](licenses/Wonder-Lantern.txt); see their SPDX markers and the file list.
 
 The community license permits use, modification, and free redistribution, requires publicly distributed modified versions to provide source under the same license, and prohibits charging for software distribution. Paid professional photography or filmmaking using it is permitted. Combined code must comply with each file's terms. The restriction on claiming derivative versions as official Wonder Lantern releases concerns software-release identity; it does not change this repository's ownership by the WonderLantern organization.
 

@@ -284,6 +284,13 @@ def verify(stock,image,report):
     s.u.hook_add(UC_HOOK_CODE,publish,begin=0x10453fac,end=0x10453fac)
     grid=[]
     properties[0x501]=2
+    if feature.get('reference_frame_version', 1) >= 2:
+        # Execute the real native source-window update, rather than inventing
+        # an aspect ratio for the view. The viewport itself remains synthetic.
+        s.map(0xC237C380, 256)
+        s.u.mem_write(s.state+offset,bytes(4))
+        s.u.mem_write(0x5008F000,bytes([0,0,2,0]))
+        s.call(0x10197D78,(0x5008F000,))
     for dims in ((0,0,720,480),(0,0,1280,720),(20,12,500,652)):
         viewport[:]=dims
         for mode in (0,1,2):
@@ -299,10 +306,25 @@ def verify(stock,image,report):
                         assert raw==original
                     else:
                         hx,hy,w,spacing_y,count_h,vx,vy,h,spacing_x,count_v,*_=struct.unpack('<hhIHHhhIHHHHBBH',raw)
-                        assert count_h==count_v==2 and hx==vx and hy==vy
+                        if feature.get('reference_frame_version', 1) >= 2:
+                            divisions=3+style
+                            assert count_v==(divisions+1 if feature.get('reference_frame_borders',True) else divisions-1)
+                            assert count_h==(divisions-1 if profile in (1,2) or not feature.get('reference_frame_borders',True) else divisions+1)
+                            assert raw[24:]==original[24:]
+                            assert not vx%2 and not vy%2
+                            assert dims[0]<=vx and dims[1]<=hy
+                            assert vx+(count_v-1)*spacing_x+2<=dims[2]
+                            assert hy+(count_h-1)*spacing_y+2<=dims[3]
+                            if profile in (1,2):
+                                crop=feature['profiles'][profile-1]['large_xywh']
+                                ideal_left=dims[0]+crop[0]*(dims[2]-dims[0])/5568
+                                assert abs((vx-spacing_x if not feature.get('reference_frame_borders',True) else vx)-ideal_left)<=6
+                        else:
+                            assert count_h==count_v==2 and hx==vx and hy==vy
                         assert not hx%2 and not hy%2 and w>=8 and h>=8
-                        assert dims[0]<=hx and dims[1]<=hy and hx+w<=dims[2] and hy+h<=dims[3]
-                        assert spacing_x==w-2 and spacing_y==h-2
+                        assert dims[0]<=hx and dims[1]<=vy and hx+w<=dims[2] and vy+h<=dims[3]
+                        if feature.get('reference_frame_version', 1) < 2:
+                            assert spacing_x==w-2 and spacing_y==h-2
                         bank=s.call(0x104b5e30,(4,1,0))
                         assert bytes(s.u.mem_read(bank+0x24,32))==raw
                         assert publications[-1]==[16,1]

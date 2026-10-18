@@ -5,7 +5,7 @@
 from .sound_layout import *
 from ..assembly import constant, invoke
 
-def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_table, template, child_templates, extension=None, sidebar_parent=None, video=None, aspect=None):
+def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_table, template, child_templates, extension=None, sidebar_parent=None, video=None, aspect=None, group=None):
     code = {}
     allocation_size = NEW_SIZE
     module_copy = module_labels = getter_check = getter_result = route_extra = route_action = action_extra = ''
@@ -23,7 +23,7 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
         route_extra = f"""beq owned; {constant('r2',mh.PAGE_OFFSET)} add r2,r0,r2; cmp r4,r2;"""
         route_action = f"""ldrh r2,[r4,#2]; {constant('r12',mh.PAGE_INDEX)} cmp r2,r12; bne sound_action;
             {invoke(f['module_action'])} b action_done; sound_action:"""
-        action_extra = f"cmp r5,#4; bne not_module; {invoke(f['module_open'])} b done; not_module:"
+        action_extra = f"cmp r5,#{extension.get('root_row',4)}; bne not_module; {invoke(f['module_open'])} b done; not_module:"
     video_copy = video_restore = video_labels = ''
     if video:
         from . import bitrate_ui as bu
@@ -60,6 +60,25 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
     c = constant
     def call(name): return invoke(f[name])
     native = lambda address: invoke(address, thumb=address != 0x10199bdc)
+    sound_page = SOUND_GROUP_INDEX if group else PAGE_INDEX
+    sound_offset = group['page_offset'] if group else PAGE_OFFSET
+    sound_parent = f"{c('r0',sound_offset)}add r0,r4,r0;"
+    group_copy = group_labels = ''
+    if group:
+        allocation_size = group['allocation_size']
+        group_copy = f"""{c('r5',group['page_offset'])}add r5,r4,r5;mov r0,r5;
+            {c('r1',group['template'])}movs r2,#44;{native(0x10199bdc)}
+            add r0,r4,#{PAGE_OFFSET};str r0,[r5,#4];"""
+        group_labels = f"{c('r0',strings['sound_title'])}movs r1,#{SOUND_GROUP_TITLE_SLOT};movs r2,#0;{call('text')}"
+        getter_check += f"{c('r12',SOUND_GROUP_INDEX)}cmp r1,r12;beq sound_group_page;"
+        getter_result += f"""sound_group_page:push {{r1-r3,lr}};{call('get')}cmp r0,#0;beq ret;
+            {c('r2',group['page_offset'])}b add_page;"""
+        route_extra += f"beq owned;{c('r2',group['page_offset'])}add r2,r0,r2;cmp r4,r2;"
+        action_extra = f"""{c('r0',PAGE_INDEX)}cmp r6,r0;bne sound_controls;
+            {action_extra}
+            cmp r5,#{group['order'].index('sound')};bne done;
+            movs r0,#0;str r0,[r4,#{RESULT}];movs r0,#2;{c('r1',SOUND_GROUP_INDEX)}{native(0x1045f732)}b done;
+            sound_controls:"""
     sidebar_refresh = ''
     if sidebar_parent:
         sidebar_refresh = f"""{c('r0',sidebar_parent)}ldr r0,[r0,#12];cmp r0,#0;beq done;
@@ -74,13 +93,13 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
             mov r0,r4; {c('r1',anchor_table)} movs r2,#32; {native(0x10199bdc)}
             add r0,r4,#{PAGE_OFFSET}; {c('r1',template)} movs r2,#44; {native(0x10199bdc)}
             {c('r5',FILES_OFFSET)} add r5,r4,r5; mov r0,r5;
-            {c('r1',child_templates[FILES_INDEX])} movs r2,#44; {native(0x10199bdc)} add r0,r4,#{PAGE_OFFSET};str r0,[r5,#4];
+            {c('r1',child_templates[FILES_INDEX])} movs r2,#44; {native(0x10199bdc)} {sound_parent}str r0,[r5,#4];
             {c('r5',SWITCH_OFFSET)} add r5,r4,r5; mov r0,r5;
-            {c('r1',child_templates[SWITCH_INDEX])} movs r2,#44; {native(0x10199bdc)} add r0,r4,#{PAGE_OFFSET};str r0,[r5,#4];
+            {c('r1',child_templates[SWITCH_INDEX])} movs r2,#44; {native(0x10199bdc)} {sound_parent}str r0,[r5,#4];
             {c('r5',POPUP_OFFSET)} add r5,r4,r5; mov r0,r5;
             {c('r1',child_templates[POPUP_INDEX])} movs r2,#44; {native(0x10199bdc)}
             add r0,r4,#{PAGE_OFFSET};str r0,[r5,#4];
-            {module_copy} {video_copy} {c('r0',MAGIC)} str r0,[r4,#56];str r6,[r4,#60];mvn r0,#0;str r0,[r4,#112];str r0,[r4,#{SETTINGS_FD}];
+            {module_copy} {video_copy} {group_copy} {c('r0',MAGIC)} str r0,[r4,#56];str r6,[r4,#60];mvn r0,#0;str r0,[r4,#112];str r0,[r4,#{SETTINGS_FD}];
             dmb ish;{c('r0',STATE_ANCHOR)} str r4,[r0,#16];{call('restore_settings')}{video_restore}mov r0,r4;
             unlock:{c('r1',STATE_ANCHOR+20)}movs r2,#0;dmb ish;str r2,[r1];
             done: pop {{r4-r6,pc}};
@@ -117,7 +136,7 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
             {c('r0',errors)}ldr r0,[r0,r1,lsl #2];
             popup_text:movs r1,#65;movs r2,#0;{call('text')}
             {c('r0',strings['ok'])}movs r1,#66;movs r2,#0;{call('text')}
-            done:{module_labels}{video_labels} movs r0,#0;pop {{r4-r8,pc}};
+            done:{module_labels}{video_labels}{group_labels} movs r0,#0;pop {{r4-r8,pc}};
         """
 
     # The stock layout constructs a static text widget (kind 1). Nikon's
@@ -167,9 +186,9 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
             enabled:movs r0,#1;str r0,[r4,#{ENABLED}];b switched;
             disable:movs r0,#0;str r0,[r4,#{ENABLED}];str r0,[r4,#{PENDING}];
             switched:movs r0,#0;str r0,[r4,#{RESULT}];{call('save_settings')}
-            return_root:movs r0,#2;{c('r1',PAGE_INDEX)}{native(0x1045f732)}
+            return_root:movs r0,#2;{c('r1',sound_page)}{native(0x1045f732)}
             ldr r0,[r4,#{RESULT}];cmp r0,#0;beq draw;
-            add r0,r4,#{PAGE_OFFSET};{call('show_error')}b done;
+            {sound_parent}{call('show_error')}b done;
             preview:ldr r0,[r4,#{LENGTH}];cmp r0,#0;beq no_file;
             ldr r0,[r4,#{BUSY}];cmp r0,#0;bne busy;
             {c('r0',0x188c)}{native(0x101993de)}cmp r0,#0;bne busy;

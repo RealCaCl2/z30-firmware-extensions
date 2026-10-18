@@ -2,16 +2,21 @@
 
 ## 本项目代码
 
-除以下声音实现文件外，本项目原创代码与文档采用 [MIT License](LICENSE)：
+除以下声音、菜单与画幅/遮幅实现文件外，本项目原创代码与文档采用 [MIT License](LICENSE)：
 
+- `src/z30_extensions/features/aspect_border.py`
+- `src/z30_extensions/features/aspect_border_lease.py`
+- `src/z30_extensions/features/aspect_frame.py`
+- `src/z30_extensions/features/aspect_mask.py`
+- `src/z30_extensions/features/aspect_mask_trace.py`
+- `src/z30_extensions/features/aspect_trace.py`
+- `src/z30_extensions/features/aspect_ui.py`
+- `src/z30_extensions/features/bitrate_ui.py`
 - `src/z30_extensions/features/shutter_sound.py`
 - `src/z30_extensions/features/sound_audio.py`
-- `src/z30_extensions/features/sound_ui.py`
 - `src/z30_extensions/features/sound_layout.py`
 - `src/z30_extensions/features/sound_settings.py`
-- `src/z30_extensions/features/bitrate_ui.py`
-- `src/z30_extensions/features/aspect_ui.py`
-- `src/z30_extensions/features/aspect_trace.py`
+- `src/z30_extensions/features/sound_ui.py`
 - `src/z30_extensions/features/ui_text.py`
 
 上述文件采用 [Wonder Lantern Community License](licenses/Wonder-Lantern.txt)。该许可证允许使用、修改和免费分发，禁止收费分发，并要求公开分发的修改版本提供同许可证源码。完整条件以随附许可证为准。由于包含收费分发限制，该部分不是 OSI 意义上的开放源代码许可。

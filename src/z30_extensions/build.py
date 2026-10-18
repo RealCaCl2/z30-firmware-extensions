@@ -35,10 +35,28 @@ def resolve_presets(preset='full'):
     return list(dict.fromkeys(selected)), [f for f in FEATURE_ORDER if f in features]
 
 
-def build(source, preset='full', *, aspect_trace=False):
+def build(source, preset='full', *, aspect_trace=False, aspect_border=False,
+          aspect_border_diagnostic=False, aspect_border_lease=False,
+          aspect_mask=None, aspect_mask_trial=False):
     selected, features = resolve_presets(preset)
+    # Photo aspect and its live-view mask are one public preset. Historical
+    # border/static-mask experiments keep their own explicitly selected path;
+    # researchers may still pass False for a no-mask comparison build.
+    if aspect_mask is None:
+        aspect_mask = ('aspect-profiles' in features and
+                       not (aspect_border or aspect_mask_trial))
     if aspect_trace and 'aspect-profiles' not in features:
         raise ValueError('Aspect trace requires aspect-profiles')
+    if aspect_border and 'aspect-profiles' not in features:
+        raise ValueError('Aspect border requires aspect-profiles')
+    if aspect_border_diagnostic and not (aspect_trace and aspect_border):
+        raise ValueError('Border diagnostic requires aspect trace and border trial')
+    if aspect_border_lease and not aspect_border:
+        raise ValueError('Border channel lease requires border trial')
+    if (aspect_mask or aspect_mask_trial) and 'aspect-profiles' not in features:
+        raise ValueError('Soft aspect mask requires aspect-profiles')
+    if aspect_mask and aspect_mask_trial:
+        raise ValueError('Soft aspect mask dynamic and trial modes are mutually exclusive')
     if features == ['liveview-dual']:
         output, report = build_dual(source)
         report.update(preset=selected[0] if len(selected) == 1 else selected,
@@ -58,7 +76,9 @@ def build(source, preset='full', *, aspect_trace=False):
     if 'shutter-sound' in features:
         from .features.shutter_sound import add
         add(plan, modules='module-host' in features, bitrate='bitrate-slowmo-uncap' in features,
-            aspect='aspect-profiles' in features, aspect_trace=aspect_trace)
+            aspect='aspect-profiles' in features, aspect_trace=aspect_trace, aspect_border=aspect_border,
+            aspect_border_diagnostic=aspect_border_diagnostic,aspect_border_lease=aspect_border_lease,
+            aspect_mask=aspect_mask, aspect_mask_trial=aspect_mask_trial)
     if 'mtp-fast' in features:
         from .features.mtp_fast import add
         add(plan)

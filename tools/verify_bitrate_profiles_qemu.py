@@ -93,8 +93,11 @@ def main():
         s.input(0x1045f732,[2,397]);s.input(int(sound['functions']['open'],16)&~1,[]);s.run_for(1)
         root=state+sound['page_offsets']['955'];page=state+video['page_offset']
         root_ids=sound['control_identifiers']['955'];ids=sound['control_identifiers'][str(video['page_index'])]
+        category=next((c for c in sound.get('menu_categories',[]) if c['key']=='bitrate'),None)
+        bitrate_row=category['row'] if category else len(root_ids)-1
+        bitrate_control=root_ids[bitrate_row]
         for profile in range(3):
-            select(root,root_ids[-1]);activate(root);s.run_for(1)
+            select(root,bitrate_control);activate(root);s.run_for(1)
             active=current();assert active==page,(hex(active),hex(page),s.remote.memory(root+20,8).hex())
             assert word(page+36)!=0
             raw=frame('profile-menu-'+str(profile));assert pixels(raw,(14,16,50,470))>500
@@ -113,7 +116,7 @@ def main():
                     if RECORDS[name]==index:expected[RATES:RATES+8]=rates(pair)
                 assert record==expected,(profile,index)
             # Reopen and require exactly one selection marker in guest text slots.
-            select(root,root_ids[-1]);activate(root);s.run_for(1);frame('profile-mark-'+str(profile))
+            select(root,bitrate_control);activate(root);s.run_for(1);frame('profile-mark-'+str(profile))
             marks=[]
             for slot in range(87,90):
                 length,ptr,style=struct.unpack('<3I',s.remote.memory(0xc2013368+slot*12,12))
@@ -126,7 +129,7 @@ def main():
         # A deterministic raw write failure exercises the actual error page.
         write(0x102c8a6a,bytes.fromhex('01207047'))
         s.audit.append(dict(diagnostic_write_failure='0x102c8a6a',candidate_file_unchanged=True))
-        select(root,root_ids[-1]);activate(root)
+        select(root,bitrate_control);activate(root)
         assert current()==page;frame('save-error-source')
         for close_name,coords in (('back',(675,28)),('ok',(350,310))):
             select(page,ids[1]);activate(page);s.run_for(1);assert word(state+52)==8

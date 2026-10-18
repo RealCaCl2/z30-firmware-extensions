@@ -69,3 +69,13 @@ Desktop.ini
 *.p12
 *.pfx
 .credentials*
+
+# Camera diagnostic exports and raw private media.
+*.DBG
+*.dbg
+*.NEF
+*.nef
+*.DNG
+*.dng
+*.dmp
+*.DMP

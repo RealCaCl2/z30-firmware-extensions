@@ -1,5 +1,8 @@
 # Wonder Lantern Z30
 
+> 2026-10-18：[v42](docs/aspect-lifecycle-v42.md) 增加原厂取景阶段限制，并在绘制目标筛选之前清除旧遮幅。用户在本次回放修复复测后反馈“正常了”，记录为本次问题获机身确认；未提供逐档或完整生命周期覆盖。v37、v40 的失败及 v41 定位记录保留。
+
+
 **简体中文** · [English](README.en.md)
 
 Wonder Lantern Z30 是 WonderLantern 组织面向 **Nikon Z30 C 1.20** 的实验性底层宿主与固件扩展研究项目，探索类似 Magic Lantern 的机身端扩展能力。当前实现是 Z30 专用原型，不是跨机型通用开发模板，也不代表 Nikon 支持或认可。
@@ -19,7 +22,9 @@ Wonder Lantern Z30 是 WonderLantern 组织面向 **Nikon Z30 C 1.20** 的实验
 | `module-host` | **实验性** SD 原生模块宿主，加载并运行 ZMOD，复用声音菜单框架。 |
 | `video-rot` | 为新录像写入方向元数据，锁定开始录制时的方向。 |
 | `bitrate-slowmo-uncap` | 机内选择原始、均衡、高质量码率并记忆；慢动作录制上限 25 分钟，支持 FAT32 分段或 exFAT 大文件。 |
-| `aspect-profiles` | 同一菜单切换六种照片比例，提供原厂网格参考框。[说明](docs/aspect-profiles.md) |
+| `aspect-profiles` | 同一菜单切换六种照片比例，包含半透明取景遮幅并保留原厂内部网格。[说明](docs/aspect-profiles.md) |
+
+`aspect-profiles` 是同一个自定义画幅预设，同时包含照片裁切和半透明取景遮幅；默认 `full` 包含它。遮幅按当前比例压暗成片范围外的区域，强度为 `128/255`（约 50%），内部网格与原厂图标保留；关闭网格仍显示遮幅，选择“关闭”恢复原厂画幅并清除遮幅。
 
 声音与模块菜单支持简体中文、繁体中文和英文回退。当前构建不增加 Camera Status 页面。
 
@@ -86,7 +91,7 @@ python patch.py full --source "Z_30_0120.bin" --output "output/EG209020-full.BIN
 | 构建内容 | 英文入口 | 简体中文入口 | 繁体中文入口 |
 | --- | --- | --- | --- |
 | 仅声音框架 | `Shutter sound` | 快门声音 | 快門聲音 |
-| 包含模块宿主（如 `full`） | `Extensions` | 自定义菜单 | 自訂選單 |
+| 包含画幅、码率或模块功能（如 `full`） | `Extensions` | 自定义菜单 | 自訂選單 |
 | 模块页 | `SD Modules` | SD 卡功能 | SD 卡功能 |
 
 已修复标题缺失、标签被空值栏裁剪、左侧栏消失、返回后按钮残留，以及非中文入口和重启后首次进入的乱码。用户对此前的绘制和语言修复实机反馈“一切正常”；新增提示页和声音记忆也已获用户实机确认；QEMU 和原厂构造器的对照证据见 [UI 验证记录](docs/ui-qemu.md)。
@@ -95,7 +100,7 @@ WAV 文件名、路径和模块输出仍使用 ASCII。中文字库只覆盖原�
 
 ## 自定义快门声音
 
-入口菜单提供开关、声音文件、预听和重新加载。文件选择页以 `*` 标记当前选项，按一次 OK 应用；选择文件不会自动开启声音或播放。
+包含画幅、码率或模块功能时，自定义菜单先按用途分类；声音的开关、文件、预听和重新加载集中在“快门声音”子菜单。仅声音预设直接显示这些操作。文件选择页以 `*` 标记当前选项，按一次 OK 应用并返回声音菜单；选择文件不会自动开启声音或播放。
 
 支持以下 SD 卡路径：
 
@@ -158,12 +163,13 @@ python tools/prepare_module.py --example counter --output "output/CORE.ZMOD"
 
 ## 验证状态
 
-2026-10-17，用户确认当前全部八项功能均已在 Nikon Z30 C 1.20 实机检验通过，包括多画幅、全信息页、声音记忆和机内码率档位。离线结果与用户实机反馈分开记录；这一功能确认不表示穷举所有组合、模式或故障条件。
+此前全部功能正常的概括反馈，后经 4:3／5:4 及回放问题复测更正。成片、取景和遮幅的对应修正分别记录在专题文档；最新 v42 回放修复获用户“正常了”反馈。离线结果与机身反馈分开，不推断全部模式或故障条件均已覆盖。
 
 | 范围 | 已记录证据 |
 | --- | --- |
-| 构建与回归 | 当前 UI 修复阶段 34 项测试通过；`shutter-sound`、`module-host`、`full` 的 CRC 与逐字节重复构建检查通过。 |
+| 构建与回归 | 本次预设整合 53 项单元测试与六种构建组合检查通过，见[整合记录](docs/aspect-preset-integration.md)；历史 `shutter-sound`、`module-host`、`full` 的 CRC 与逐字节重复构建检查通过。 |
 | 菜单与语言 | QEMU 原生页面/构造器和 Unicorn 指令检查；此前绘制与语言修复有用户实机反馈。新增提示页与声音记忆已获用户实机确认。 |
+| 自定义画幅与遮幅 | v11 成片、v16 取景、v17 边界与网格共存及后续遮幅有对应用户反馈；v42 本次回放问题复测正常。详见[当前说明](docs/aspect-profiles.md)。 |
 | EG 安装、SD 宿主 | 维护者确认 Z30 C 1.20 安装以及 ZMOD 加载/运行。 |
 | 视频方向 | 独立预设有实机方向与录制中锁定反馈；覆盖边界见专题文档。 |
 | MTP 加速 | 已记录原厂对照的 590 条属性列表响应一致及查询耗时下降，数字与条件见验证文档。 |
@@ -189,6 +195,8 @@ python -m unittest discover -s tests -v
 | --- | --- |
 | [离线构建指引](PATCH_GUIDE.md) | 准备文件、菜单选择、产物与常见错误。 |
 | [构建说明](docs/build.md) | 输入身份、解码、预设组合与补丁流程。 |
+| [画幅与半透明遮幅](docs/aspect-profiles.md) | 六种比例、输出尺寸、取景遮幅与验证边界。 |
+| [v42 回放修复](docs/aspect-lifecycle-v42.md) | 生命周期限制、旧遮幅清理及用户复测。 |
 | [声音说明](docs/shutter-sound.md) | 声音菜单、触发条件、文件格式和状态。 |
 | [模块说明](docs/modules.md) | 宿主操作、ABI 2、示例与实验性限制。 |
 | [视频方向](docs/video-rotation.md) | 姿态锁定、元数据和实机记录。 |
@@ -201,7 +209,7 @@ python -m unittest discover -s tests -v
 
 本项目属于 **WonderLantern** 组织，是独立实验项目；不代表 Nikon 支持或认可。
 
-除 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 列出的七个声音/菜单实现文件外，原创代码和文档采用 [MIT License](LICENSE)。这些文件包括 `shutter_sound.py`、`sound_audio.py`、`sound_ui.py`、`sound_layout.py`、`sound_settings.py`、`bitrate_ui.py` 和 `ui_text.py`，采用 [Wonder Lantern Community License](licenses/Wonder-Lantern.txt)。
+原创代码和文档采用 [MIT License](LICENSE)，[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 列出的声音、菜单与画幅/遮幅实现文件采用 [Wonder Lantern Community License](licenses/Wonder-Lantern.txt)；以各文件 SPDX 标记及清单为准。
 
 该社区许可证允许使用、修改和免费分发，要求公开分发的修改版本提供同许可证源码，禁止收费分发软件；允许用软件从事收费摄影等专业工作。使用或分发组合代码须遵守各文件适用条款。其“衍生版本不得自称官方 Wonder Lantern 发布”的条款约束软件发布身份，不改变本仓库属于 WonderLantern 组织的事实。
 

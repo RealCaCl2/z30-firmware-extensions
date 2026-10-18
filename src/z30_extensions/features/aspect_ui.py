@@ -12,20 +12,41 @@ MAGIC = 0x32414C57  # WLA2: previous-area field now refers to the user setting.
 AREA_KEY = 0x501
 CAPTURE_AREA_KEY = 0x189E  # Derived state; never substitute for the user setting.
 NAMES = ('OFF (stock)', '4:3', '5:4', '2:1', '2.35:1', '2.39:1', '65:24 XPAN')
-SPANS = ((0x11571E18, 60), (0x115A4D4C, 0x1E0))
-SIZES = dict(aspect_get=96, aspect_labels=384, aspect_open=160, aspect_action=448,
+SPANS = ((0x11571DDC, 120), (0x115A4D4C, 0x1E0))
+SIZES = dict(aspect_get=96, aspect_labels=384, aspect_open=160, aspect_action=512,
              aspect_save=640, aspect_restore=640, aspect_close=128,
-             aspect_translate=256, aspect_index=160, aspect_trim=160,
-             aspect_grid=704, aspect_grid_original=64, aspect_sync=256)
+             aspect_translate=256, aspect_file_guard=128, aspect_index=160, aspect_trim=160, aspect_trim_alternate=192,
+             aspect_grid=384, aspect_grid_original=64, aspect_sync=256, aspect_output_data=160,
+             aspect_frame_axis=384, aspect_frame_prepare=1024)
+
+# Independent native view rectangle calculations query area geometry.
+# Guard exact callsites, not an address range or a guessed sleep/wake refresh.
+LIVEVIEW_WINDOW_CALLER = 0x10197D9D
+LIVEVIEW_OUTPUT_CALLERS = (0x1018AB41, LIVEVIEW_WINDOW_CALLER, 0x101985E5, 0x1018AE57)
 
 # Return addresses of the stock still-image buffer/geometry consumers. Generic
 # file playback/editing callers are deliberately excluded: an old photo must
 # never acquire the currently selected shooting ratio.
 PREVIEW_CALLERS = {
     'small': (0x100A4F65, 0x100A51AD, 0x101434FD, 0x10143641,
-              0x10146737, 0x10221B5B, 0x1038FAD3),
-    'large': (0x10143545, 0x10143671, 0x101438DB, 0x1014676D, 0x10221B63),
+              0x10146737),
+    'large': (0x10143545, 0x10143671, 0x101438DB, 0x1014676D),
 }
+
+# These native file/metadata/layout consumers describe an existing image,
+# rather than the next capture. In particular 1038fa8c scales a preview using
+# TWO getters; guarding only the numerator or denominator still distorts it.
+# Keep their original table pointers together. The shared 10221ae2 metadata
+# service is included: its input record is not the current shooting setting.
+FILE_GEOMETRY_CALLERS = (
+    0x10221B45,
+    0x103409A7, 0x103409B9, 0x10340EDB, 0x10341023,
+    0x103419EB, 0x10341A6B, 0x10341A7D, 0x10341A97,
+    0x10341E7F, 0x10342357, 0x10342669, 0x103426A9,
+    0x1034423D, 0x10347557, 0x10348323, 0x10348659,
+    0x1034B1F7, 0x10351BD9, 0x103544DB,
+    0x1038FAEB, 0x1038FB03, 0x103A8C9F, 0x103A8D7B, 0x103AF625,
+)
 
 PREVIEW_DIRECT_SPAN = (0x1157223C, 80)
 # Literal reads in the independent preview pixel-buffer producers. Strides
@@ -49,7 +70,8 @@ PREVIEW_DIRECT_HOOKS = (
 )
 
 
-def prepare(plan, f, resources, allocation_size, *, trace=False):
+def prepare(plan, f, resources, allocation_size, *, trace=False, border=False, border_diagnostic=False,
+            border_lease=False, mask=False, mask_trial=False):
     sizes = dict(SIZES)
     for key, size in SIZES.items():
         f[key] = plan.alloc(bytes(size))
@@ -107,23 +129,28 @@ def prepare(plan, f, resources, allocation_size, *, trace=False):
         {c('r0',AREA_KEY)}movs r1,#2;{n(0x10465990)}
         done:movs r0,#0;pop {{r4-r6,pc}};'''
     # Keep the original area when enabling, and restore it when disabling.
-    # Publish selection only after the native area setter reports success.
-    codes['aspect_action'] = f'''push {{r4-r8,lr}};mov r4,r0;
+    # Publish before the native setter can notify geometry consumers. The area
+    # guard still rejects custom tables until area 2 is visible. Restore both
+    # selection fields if the setter or immediate readback fails; save only
+    # after success. This also matches restore -> sync initialization ordering.
+    codes['aspect_action'] = f'''push {{r4-r9,lr}};sub sp,#4;mov r4,r0;
         ldrh r5,[r4,#22];ldrh r0,[r4,#24];add r5,r0;cmp r5,#6;bhi done;
         {c('r0',0x188c)}{n(0x101993de)}cmp r0,#0;bne done;
-        {call('aspect_get')}cmp r0,#0;beq done;mov r6,r0;ldr r7,[r6];
+        {call('aspect_get')}cmp r0,#0;beq done;mov r6,r0;ldr r7,[r6];ldr r9,[r6,#8];
         cmp r5,#0;beq disable;cmp r7,#0;bne area;
         {c('r0',AREA_KEY)}{n(0x10465984)}cmp r0,#4;bhi zero;cmp r0,#1;beq zero;cmp r0,#3;bne prior;
         zero:movs r0,#0;prior:str r0,[r6,#8];
         area:movs r8,#2;b set_area;
         disable:cmp r7,#0;beq root;ldr r8,[r6,#8];cmp r8,#4;bhi fallback;cmp r8,#1;beq fallback;cmp r8,#3;bne set_area;
         fallback:movs r8,#0;
-        set_area:{c('r0',AREA_KEY)}mov r1,r8;{n(0x10465990)}cmp r0,#1;bne done;
-        {c('r0',AREA_KEY)}{n(0x10465984)}cmp r0,r8;bne done;
-        str r5,[r6];dmb ish;{call('aspect_save')}cmp r0,#1;beq root;
+        set_area:str r5,[r6];dmb ish;
+        {c('r0',AREA_KEY)}mov r1,r8;{n(0x10465990)}cmp r0,#1;bne rollback;
+        {c('r0',AREA_KEY)}{n(0x10465984)}cmp r0,r8;bne rollback;
+        {call('aspect_save')}cmp r0,#1;beq root;
         mov r0,r4;{call('show_error')}b done;
+        rollback:str r7,[r6];str r9,[r6,#8];dmb ish;b done;
         root:movs r0,#2;movw r1,#955;{n(0x1045f732)}
-        done:movs r0,#0;pop {{r4-r8,pc}};'''
+        done:movs r0,#0;add sp,#4;pop {{r4-r9,pc}};'''
     # Pure address translation to immutable per-profile tables. No ROM/RAM
     # geometry table is edited when the user changes the selected profile.
     codes['aspect_translate'] = f'''push {{r4-r6,lr}};mov r4,r0;{call('aspect_get')}
@@ -135,11 +162,29 @@ def prepare(plan, f, resources, allocation_size, *, trace=False):
         first:lsls r5,r5,#3;
         translate:{c('r1',pointer_table)}ldr r0,[r1,r5];add r0,r6;pop {{r4-r6,pc}};
         stock:mov r0,r4;pop {{r4-r6,pc}};'''
+    file_callers = plan.alloc(struct.pack('<'+'I'*len(FILE_GEOMETRY_CALLERS), *FILE_GEOMETRY_CALLERS))
+    # r0 = original pointer, r1 = original native caller. No app-state guess,
+    # lock, table mutation or per-file write is needed for this isolation.
+    codes['aspect_file_guard'] = f'''push {{r4,lr}};mov r4,r0;
+        {c('r2',file_callers)}movs r3,#{len(FILE_GEOMETRY_CALLERS)};
+        next_file:ldr r0,[r2],#4;cmp r0,r1;beq original;
+        subs r3,#1;bne next_file;
+        mov r0,r4;{call('aspect_translate')}pop {{r4,pc}};
+        original:mov r0,r4;pop {{r4,pc}};'''
     codes['aspect_index'] = '''cmp r0,#0;bne one;cmp r1,#0;beq i0;cmp r1,#1;beq i1;cmp r1,#2;beq i2;b bad;
         one:cmp r0,#1;bne two;cmp r1,#1;beq i3;cmp r1,#2;beq i4;b bad;
         two:cmp r0,#2;bne bad;cmp r1,#2;beq i5;
         bad:movs r0,#6;bx lr;i0:movs r0,#0;bx lr;i1:movs r0,#1;bx lr;
         i2:movs r0,#2;bx lr;i3:movs r0,#3;bx lr;i4:movs r0,#4;bx lr;i5:movs r0,#5;bx lr;'''
+    view_callers = plan.alloc(struct.pack('<' + 'I' * len(LIVEVIEW_OUTPUT_CALLERS), *LIVEVIEW_OUTPUT_CALLERS))
+    codes['aspect_output_data'] = f'''push {{r4,lr}};mov r4,r0;
+        {c('r2',view_callers)}movs r3,#{len(LIVEVIEW_OUTPUT_CALLERS)};
+        next_view:ldr r0,[r2],#4;cmp r1,r0;beq view;
+        subs r3,#1;bne next_view;b custom;
+        view:
+        {call('aspect_get')}cmp r0,#0;beq original;ldr r0,[r0];subs r0,#1;cmp r0,#1;bls original;
+        custom:mov r0,r4;{call('aspect_file_guard')}pop {{r4,pc}};
+        original:mov r0,r4;pop {{r4,pc}};'''
     selectors = []
     def selector(name, address, size, source):
         sizes[name] = size
@@ -198,23 +243,23 @@ def prepare(plan, f, resources, allocation_size, *, trace=False):
             {replay}push {{r0,r1}};{c('r0',(address+length)|1)}
             str r0,[sp,#4];pop {{r0,pc}};'''
         plan.edit(address,jump(address,f[name],length),'Aspect independent preview producer',bytes.fromhex(expected))
-    selector('aspect_output', 0x1020BFDA, 256 if trace else 128, f'''push {{r4,lr}};{c('r2',0xc18c7dfc)}
-        ldr r0,[r2,r0,lsl #2];add r0,r0,r1,lsl #2;{call('aspect_translate')}pop {{r4,pc}};''')
+    selector('aspect_output', 0x1020BFDA, 768 if trace else 128, f'''push {{r4,lr}};mov r4,lr;{c('r2',0xc18c7dfc)}
+        ldr r0,[r2,r0,lsl #2];add r0,r0,r1,lsl #2;mov r1,r4;{call('aspect_output_data')}pop {{r4,pc}};''')
     for name, address, offset, fallback in (('aspect_internal',0x1020BFC8,0,0),
                                            ('aspect_reduced',0x1020C05C,0x28,8)):
-        selector(name,address,160,f'''push {{r4,lr}};cmp r0,#0;bne fixed;
+        selector(name,address,160,f'''push {{r4,lr}};mov r4,lr;cmp r0,#0;bne fixed;
             {c('r0',0xc18c7de8+offset)}ldr r0,[r0,r1,lsl #2];add r0,r0,r2,lsl #2;
-            {call('aspect_translate')}pop {{r4,pc}};
+            mov r1,r4;{call('aspect_file_guard')}pop {{r4,pc}};
             fixed:{c('r0',0x115a4c80+fallback)}pop {{r4,pc}};''')
-    selector('aspect_offset',0x1020C072,128,f'''push {{r4,lr}};
-        {c('r1',0x115a4d4c)}add r0,r1,r0,lsl #2;{call('aspect_translate')}pop {{r4,pc}};''')
+    selector('aspect_offset',0x1020C072,128,f'''push {{r4,lr}};mov r4,lr;
+        {c('r1',0x115a4d4c)}add r0,r1,r0,lsl #2;mov r1,r4;{call('aspect_file_guard')}pop {{r4,pc}};''')
     for name,address,offset,fallback in (('aspect_crop',0x1020C07C,0x3c,0xc),
                                         ('aspect_edges',0x1020C0D2,0x50,0x10),
                                         ('aspect_desc_edges',0x1020C128,0x64,0x10)):
-        selector(name,address,224,f'''push {{r4-r6,lr}};cmp r0,#0;bne fixed;
+        selector(name,address,224,f'''push {{r4-r6,lr}};mov r6,lr;cmp r0,#0;bne fixed;
             mov r4,r1;mov r0,r2;mov r1,r3;{call('aspect_index')}mov r5,r0;
             {c('r0',0xc18c7de8+offset)}ldr r0,[r0,r4,lsl #2];add r0,r0,r5,lsl #2;
-            {call('aspect_translate')}pop {{r4-r6,pc}};
+            mov r1,r6;{call('aspect_file_guard')}pop {{r4-r6,pc}};
             fixed:{c('r0',0x115a4c80+fallback)}pop {{r4-r6,pc}};''')
     # Horizontal trim comes from a direct PC-relative table reference.
     codes['aspect_trim'] = f'''push {{r0,r1,r3,lr}};{c('r0',0x11571e18)}
@@ -223,6 +268,14 @@ def prepare(plan, f, resources, allocation_size, *, trace=False):
         {c('r12',0x101428b5)}bx r12;'''
     plan.edit(0x101428AA,jump(0x101428AA,f['aspect_trim'],10),'Aspect horizontal trim table',
               bytes.fromhex('f94a95f8290201eb4101'))
+    # Camera trace: info+0x228 == 3 skips the default table reference above
+    # and reads 0x11571DDC instead. Translate that distinct reference too.
+    codes['aspect_trim_alternate'] = f'''push {{r0,r2,r3,lr}};{c('r0',0x11571ddc)}
+        {call('aspect_translate')}mov r1,r0;pop {{r0,r2,r3,lr}};
+        add.w r0,r0,r0,lsl #1;add.w r1,r1,r0,lsl #2;
+        push {{r0,r1}};{c('r0',0x101427fb)}str r0,[sp,#4];pop {{r0,pc}};'''
+    plan.edit(0x101427F0,jump(0x101427F0,f['aspect_trim_alternate'],10),
+              'Aspect alternate horizontal trim table', bytes.fromhex('2a4900eb400001eb8001'))
     # v5's speculative narrow-source rewrite failed on camera. Keep native
     # configuration unchanged; an opt-in diagnostic can still snapshot it.
     if trace:
@@ -237,36 +290,92 @@ def prepare(plan, f, resources, allocation_size, *, trace=False):
     # and outputs retain the exact original normalization path.
     codes['aspect_grid_original'] = f'''push.w {{r4-r9,lr}};sub sp,#0x24;mov r6,r1;movs r2,#32;
         {c('r12',0x10454d51)}bx r12;'''
-    codes['aspect_grid'] = f'''push {{r4-r11,lr}};sub sp,#4;mov r4,lr;
-        {call('aspect_grid_original')}{c('r1',0x104be455)}cmp r4,r1;bne done;
+    from .aspect_frame import source_codes
+    codes.update(source_codes(f, include_borders=not (mask or mask_trial)))
+    codes['aspect_grid'] = f'''push {{r4-r6,lr}};mov r4,lr;
+        {call('aspect_grid_original')}mov r6,r0;{c('r1',0x104be455)}cmp r4,r1;bne done;
         {call('aspect_get')}cmp r0,#0;beq done;ldr r5,[r0];cmp r5,#0;beq done;cmp r5,#6;bhi done;
         {c('r0',AREA_KEY)}{n(0x10465984)}cmp r0,#2;bne done;
         subw sp,sp,#0x468;mov r0,sp;{n(0x104b9348)}
-        ldrsh r6,[sp,#8];ldrsh r7,[sp,#10];ldrsh r8,[sp,#12];ldrsh r9,[sp,#14];
-        addw sp,sp,#0x468;subs r8,r8,r6;subs r9,r9,r7;
-        cmp r6,#0;blt done;cmp r7,#0;blt done;cmp r8,#8;blt done;cmp r9,#8;blt done;
-        cmp r8,#8192;bhi done;cmp r9,#8192;bhi done;
-        {c('r0',geometry_table)}add r0,r0,r5,lsl #4;ldr r10,[r0,#8];ldr r11,[r0,#12];
-        mul r0,r8,r11;mul r1,r9,r10;cmp r0,r1;bhs sides;
-        mov r4,r8;udiv r5,r0,r10; b quant;
-        sides:udiv r4,r1,r11;mov r5,r9;
-        quant:bic r4,r4,#3;bic r5,r5,#3;cmp r4,#8;blt done;cmp r5,#8;blt done;
-        sub r0,r8,r4;lsrs r0,#1;add r6,r0;bic r6,r6,#1;
-        sub r0,r9,r5;lsrs r0,#1;add r7,r0;bic r7,r7,#1;
-        {c('r0',0xc201a7f4)}strh r6,[r0];strh r7,[r0,#2];str r4,[r0,#4];
-        subs r1,r5,#2;strh r1,[r0,#8];movs r1,#2;strh r1,[r0,#10];
-        strh r6,[r0,#12];strh r7,[r0,#14];str r5,[r0,#16];
-        subs r2,r4,#2;strh r2,[r0,#20];strh r1,[r0,#22];movs r1,#1;strh r1,[r0,#26];
-        done:add sp,#4;pop {{r4-r11,pc}};'''
+        {c('r0',0xc201a7f4)}add r1,sp,#8;
+        {c('r2',geometry_table)}add r2,r2,r5,lsl #4;mov r3,r5;
+        {call('aspect_frame_prepare')}addw sp,sp,#0x468;
+        done:mov r0,r6;pop {{r4-r6,pc}};'''
     plan.edit(0x10454D46,jump(0x10454D46,f['aspect_grid'],10),'Experimental aspect grid frame after normalization',
               bytes.fromhex('2de9f04389b00e462022'))
+    mask_state = None
+    mask_offset = None
+    if mask or mask_trial:
+        from .aspect_mask import (SIZES as mask_sizes, STATE_SIZE, SUBMIT_SITE,
+                                  SUBMIT_EXPECTED, SUBMIT_SIZE, trial_state,
+                                  source_codes as mask_source_codes)
+        if mask and mask_trial:
+            raise ValueError('Soft mask dynamic and trial modes are mutually exclusive')
+        if mask and (border or border_diagnostic or border_lease):
+            raise ValueError('Soft mask dynamic mode is built without border extras')
+        for key, size in mask_sizes.items():
+            sizes[key] = size
+            f[key] = plan.alloc(bytes(size))
+        if mask_trial:
+            # Trial mode keeps a fixed ROM-side state for the QEMU replay only.
+            mask_state = plan.alloc(trial_state())
+        codes.update(mask_source_codes(f, mask_state, trial=bool(mask_trial), geometry_table=geometry_table))
+        plan.edit(SUBMIT_SITE, jump(SUBMIT_SITE, f['aspect_mask_submit'], SUBMIT_SIZE),
+                  'Soft aspect mask: dim the live-view image surface at the GPU submit boundary',
+                  bytes.fromhex(SUBMIT_EXPECTED))
+    if border:
+        from .aspect_border import SIZES as border_sizes, source_codes as border_codes
+        border_sizes = dict(border_sizes)
+        if border_diagnostic:
+            border_sizes.update(aspect_border_note=128, aspect_border_snapshot=256,
+                                aspect_border_apply=1280, aspect_border_publish=1280,
+                                aspect_border_monitor=160, aspect_border_pack=192)
+        if border_lease:
+            from .aspect_border_lease import SIZES as lease_sizes
+            border_sizes.update(lease_sizes)
+            border_sizes['aspect_border_publish']=2048 if border_diagnostic else 1024
+            if border_diagnostic:border_sizes['aspect_border_snapshot']=384
+        for key, size in border_sizes.items():
+            sizes[key] = size
+            f[key] = plan.alloc(bytes(size))
+        from .aspect_trace import TRACE_BYTES
+        border_cache_offset = 16 + (TRACE_BYTES if trace else 0)
+        codes.update(border_codes(f, geometry_table, border_cache_offset, diagnostic=border_diagnostic,lease=border_lease))
+        if border_lease:
+            plan.edit(0x104B6B0C,jump(0x104B6B0C,f['aspect_border_visibility'],8),
+                      'Independent border yields channel ownership to native visibility writes',
+                      bytes.fromhex('2de9f04103281446'))
+            plan.edit(0x104B6BDC,jump(0x104B6BDC,f['aspect_border_visibility_batch'],8),
+                      'Independent border yields channel ownership to native batch visibility writes',
+                      bytes.fromhex('2de9f04116000d46'))
+        if border_diagnostic:
+            marker="cmp r4,r1;bne done;"
+            assert codes['aspect_grid'].count(marker)==1
+            codes['aspect_grid']=codes['aspect_grid'].replace(marker,
+                marker+"push {r0-r3,r12,lr};movs r0,#3;"+call('aspect_border_note')+
+                "pop {r0-r3,r12,lr};",1)
+        plan.edit(0x103C0568, jump(0x103C0568, f['aspect_border_pack'], 12),
+                  'Opt-in independent aspect border after native rectangle packing',
+                  bytes.fromhex('2de9f04116468046f7f025fe'))
+        plan.edit(0x104BE73A, jump(0x104BE73A, f['aspect_border_monitor'], 10),
+                  'Opt-in aspect border refresh after native grid monitor',
+                  bytes.fromhex('70b541f60720a7f720f9'))
     trace_info=None
     if trace:
-        from .aspect_trace import install
+        if mask:
+            from .aspect_mask_trace import install
+        else:
+            from .aspect_trace import install
         trace_info=install(plan,f,codes,sizes)
+    from .aspect_mask import STATE_SIZE as MASK_STATE_SIZE
+    mask_extra = MASK_STATE_SIZE if mask else 0
+    if mask:mask_offset = state_offset+16
     return dict(page_offset=page_offset,state_offset=state_offset,
-                allocation_size=state_offset+16+(trace_info['bytes'] if trace_info else 0),
-                trace=trace_info,
+                allocation_size=state_offset+16+(trace_info['bytes'] if trace_info else 0)+(12 if border else 0)+(64 if border_diagnostic else 0)+(4 if border_lease else 0)+mask_extra,
+                mask_offset=mask_offset,
+                trace=trace_info, border=border, border_cache_offset=border_cache_offset if border else None,
+                border_diagnostic=border_diagnostic,
+                border_lease=border_lease, mask=mask, mask_trial=mask_trial, mask_state=mask_state,
                 codes=codes,geometry_table=geometry_table,selectors=selectors,
                 function_names=list(codes),shadows=copies,sizes=sizes,profiles=profiles)
 
@@ -283,18 +392,109 @@ def finish(plan, f, extension, identifiers):
         area_key=hex(AREA_KEY),capture_area_key=hex(CAPTURE_AREA_KEY),profile_area=2,shadows=extension['shadows'],
         config_magic=hex(MAGIC),config_version=2,
         preview_geometry_version=2,
+        playback_isolation_version=1,
+        file_geometry_callers=[hex(v) for v in FILE_GEOMETRY_CALLERS],
         narrow_source_window_version=0,
         native_area_sync_version=1,
+        selection_publication_version=2,
+        alternate_trim_table_version=1,
+        liveview_window_guard_version=3,
+        liveview_native_output_callers=[hex(v) for v in LIVEVIEW_OUTPUT_CALLERS],
+        liveview_native_output_profiles=[1,2],
         diagnostic_trace=extension['trace'],
         preview_direct_hooks=[hex(v[0]) for v in PREVIEW_DIRECT_HOOKS],
         preview_capture_callers={k:[hex(v) for v in values] for k,values in PREVIEW_CALLERS.items()},
         preview_policy='Fit actual L aspect in stock preview allocation; four-pixel alignment; capture callers only',
         profiles=extension['profiles'],restore_policy='First custom-menu initialization; default OFF before initialization',
-        preview='Experimental reference rectangle replaces enabled native grid, mode 0 only',
+        reference_frame_version=2,
+        reference_frame_borders=not (extension['mask'] or extension['mask_trial']),
+        preview='Frame and selected thirds/quarters lines share the native grid; narrow bounds project DX coordinates',
         status='experimental_menu_and_geometry_not_camera_validated',physical_verified=False,
-        limitations=['Native grid must be enabled for the reference rectangle.',
+        limitations=['Native grid must be enabled; selected grid style is drawn within the visible photo bounds.',
+                     'Narrow photo borders outside the native visible source window are clipped, not fitted inside it.',
                      'Mode 0 physical LCD identity, viewport semantics and pixel clearing require hardware validation.',
                      'Preview output dimensions are experimental; no physical playback verification of this image.',
                      'Fixed 160x120 thumbnail path remains stock.',
                      'No filled mask, live sensor/JPEG/NEF/HDMI or concurrent capture validation.',
                      'Alternate RAW/processing branches remain experimental; not a camera-ready update.'])
+    if extension['mask'] or extension['mask_trial']:
+        from .aspect_mask import (DEFAULT_ALPHA, IMAGE_SLOT, SNAPSHOT, SOURCE_WINDOW, SUBMIT_SITE,
+                                  STATE_SIZE, TRIAL_RECTS, VIEW_KIND, OVERLAY_BUSY, PHOTO_BACKEND, UI_SERVICE_PHASE)
+        soft = dict(
+            version=12, opt_in=True, physically_verified=False,
+            native_photo_context_guard=bool(extension['mask']),
+            photo_context_fields=dict(view_kind=hex(VIEW_KIND),busy=[hex(v) for v in OVERLAY_BUSY],
+                                      backend=hex(PHOTO_BACKEND),ready_flags=hex(SNAPSHOT),
+                                      ui_service_phase=hex(UI_SERVICE_PHASE)),
+            allowed_ui_service_phases=[1,2],
+            retire_before_descriptor_filter=bool(extension['mask']),
+            dynamic=bool(extension['mask']), trial=bool(extension['mask_trial']),
+            state=(hex(extension['mask_state']) if extension['mask_trial']
+                   else 'aspect_get+16:owned-surface-and-rectangles;native-photo-context+projection'),
+            state_bytes=STATE_SIZE,
+            state_anchor=None, viewport_snapshot=hex(SNAPSHOT), source_window=hex(SOURCE_WINDOW),
+            image_slot=hex(IMAGE_SLOT), submit_site=hex(SUBMIT_SITE),
+            alpha=DEFAULT_ALPHA, alpha_offset=8, flags_offset=0, count_offset=12,
+            rects_offset=16, color_offset=0x50,
+            fill_function=hex(f['aspect_mask_fill'] | 1),
+            submit_function=hex(f['aspect_mask_submit'] | 1),
+            clear_function=hex(f['aspect_mask_erase']|1) if extension['mask'] else None,
+            layering='Uniformly fills the lower RGBA live-view image surface at the guarded '
+                     'bank-clear boundary; the native UI canvas is composed above it.',
+            geometry='Reads the selected profile and stable native viewport/source snapshots; '
+                     'reuses the existing photo projection, without depending on grid visibility.',
+            coverage='Actual crop edges retain their projection; viewport-clipped photo edges '
+                     'continue to the LCD edge so exterior shading has no viewport-end gaps.',
+            submit_policy='Dynamic: retire old owned pixels before descriptor filtering when native UI stage is not 1/2; '
+                          'native photo-overlay eligibility subset checked before projection and fill; '
+                          'no grid preference or snapshot locking API in the worker. '
+                          'Only type-0xa03 clears of native 720x480 E-region overlay banks; '
+                          'validates bounds and replaces every outside-photo image pixel; '
+                          'does not skip opaque residual pixels, which would leave mask holes.',
+            erase_policy='Dynamic: bounded try-lock protects private RAM ownership history; '
+                         'retire prior rectangles on context/profile/geometry decline or rectangle change. '
+                         'Clear only the exact committed mask word on the same current image surface; '
+                         'do not dereference a replaced surface or erase rewritten native pixels.',
+            qemu_evidence=None,
+            limitations=['QEMU display model only; on-camera layering, cache coherency and refresh '
+                         'lifecycle are unverified.',
+                         'Physical camera validation is still required; QEMU runs the rebuilt image '
+                         'through a ROM replay because the machine hash-gates the stock -bios.',
+                         f'Alpha {DEFAULT_ALPHA}/255 follows camera feedback; this opacity still '
+                         'requires on-camera appearance confirmation.'])
+        if extension['mask_trial']:
+            soft['trial_rects'] = [list(rect) for rect in TRIAL_RECTS]
+            soft['trial_geometry'] = 'Static 2.35:1 sample bands for the QEMU end-to-end trial'
+        plan.features['aspect_profiles']['soft_mask'] = soft
+        plan.features['aspect_profiles']['limitations'][5] = (
+            'Soft mask is an experimental opt-in: QEMU layering is verified, on-camera alpha, '
+            'cache coherency and live-view exit/enter lifecycle remain unverified.')
+    if extension['border']:
+        plan.features['aspect_profiles']['independent_border'] = dict(
+            version=1, opt_in=True, physically_verified=False,
+            producer='0x103c0568', refresh_monitor='0x104be73a',
+            component=3, mask=1, colour_rgb=[255,255,0], strip_pixels=8,
+            long_side_stroke_pixels=8, end_cap_stroke_pixels=2,
+            stroke_coverage_camera_verified=False,
+            dirty_state_word_offset=12,
+            cache_state_word_offset=extension['border_cache_offset'],
+            diagnostic=extension['border_diagnostic'],
+            channel_lease=extension['border_lease'],
+            requires_native_rectangle_component_enabled=True,
+            free_records_required=4, occupied_records_preserved=True,
+            stock_grid_preference_unchanged=True,
+            cleanup='Repack stock rectangle bank; no persistent additions to the bank',
+            limitations=['Prototype: camera output and refresh lifecycle unverified.',
+                         'If four records are not free, skip the additional border.',
+                         'Original component visibility and photo readiness gates remain.'])
+        plan.features['aspect_profiles']['limitations'][0] = (
+            'Independent border requires the native rectangle component and four free records; '
+            'the stock grid setting controls the white grid, not the additional yellow strips.')
+        if extension['border_diagnostic']:
+            from .aspect_border import DIAGNOSTIC_NAMES
+            plan.features['aspect_profiles']['independent_border']['diagnostic_counters'] = list(DIAGNOSTIC_NAMES)
+        if extension['border_lease']:
+            plan.features['aspect_profiles']['independent_border'].update(
+                version=2, requires_native_rectangle_component_enabled=False,
+                lease_state_word_offset=extension['border_cache_offset']+12+(64 if extension['border_diagnostic'] else 0),
+                lease_policy='Enable only disabled empty bank; native visibility writes relinquish ownership; release never hides active native records')

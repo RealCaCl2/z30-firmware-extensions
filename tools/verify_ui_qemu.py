@@ -199,12 +199,14 @@ def main():
                             s.run_for(.5)
                         frame(f'error-dialog-{cycle}-{error}-closed')
                         if 'module_host' in report['features']:
-                            count = white_text(captured[f'error-dialog-{cycle}-{error}-closed'],78,274,350,314)
+                            module_row=next((c['row'] for c in sound.get('menu_categories',[]) if c['key']=='modules'),4)
+                            box=sound['pages']['955']['label_rectangles'][module_row]
+                            count = white_text(captured[f'error-dialog-{cycle}-{error}-closed'],*box)
                             s.audit.append({'dialog_closed_module_label_pixels':count,'error':error,'cycle':cycle})
                             length, pointer, style = struct.unpack('<3I',s.remote.memory(0xc2013368+74*12,12))
                             label = s.remote.memory(pointer,length*(2 if a.language.startswith('zh-') else 1)) if length else b''
                             registry = int.from_bytes(s.remote.memory(root+36,4),'little')
-                            row = s.input(0x1045745e,[registry,1,4])
+                            row = s.input(0x1045745e,[registry,1,module_row])
                             row_widget = int(row['registers']['r0'],16)
                             s.audit.append({'module_root_slot_length':length,'module_root_slot_raw':label.hex(),
                                             'module_root_style':style,'module_root_widget':hex(row_widget),

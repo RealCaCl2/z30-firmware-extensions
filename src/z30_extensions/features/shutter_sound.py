@@ -9,7 +9,7 @@ from .sound_audio import audio_code
 from .sound_ui import ui_code
 
 
-def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False):
+def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False, aspect_border=False, aspect_border_diagnostic=False, aspect_border_lease=False, aspect_mask=False, aspect_mask_trial=False):
     im = plan.image
     if im.read(STATE_ANCHOR, 44) != bytes(44):
         raise ValueError('Sound state requires the unused stock page-zero slot')
@@ -31,6 +31,9 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False):
     sizes['dismiss_error'] = 96
     if aspect:
         sizes.update(ensure=1024, getter=512, route=448, row=384)
+    grouped = bool(modules or bitrate or aspect)
+    if grouped:
+        sizes.update(ensure=1280, getter=640, route=640, action=1280)
     f = {name: plan.alloc(bytes(size)) for name, size in sizes.items()}
     from . import ui_text
     text_resources = ui_text.prepare(plan, f)
@@ -45,6 +48,8 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False):
     if modules or bitrate or aspect:
         texts['entry'] = texts['title'] = 'Extensions'
     strings = {key: text_resources.alloc(text) for key, text in texts.items()}
+    if grouped:
+        strings['sound_title'] = text_resources.alloc('Shutter sound')
     paths = [plan.alloc(path.encode() + b'\0') for path in ['A:\\SHUTTER.WAV'] + [f'A:\\SHUTTER\\{i}.WAV' for i in range(1, 5)]]
     path_table = plan.alloc(struct.pack('<5I', *paths))
     file_names = plan.alloc(struct.pack('<5I', *[strings[k] for k in ('root', 'one', 'two', 'three', 'four')]))
@@ -91,15 +96,42 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False):
         child_templates[au.PAGE_INDEX] = plan.alloc(struct.pack('<11I',
             (au.PAGE_INDEX << 16) | 2, 0, 0, 0, at, 0, 0, 0, 0, 0, am))
         previous_size = video['allocation_size'] if video else extension['allocation_size'] if extension else NEW_SIZE
-        aspect_extension = au.prepare(plan, f, text_resources, previous_size, trace=aspect_trace)
+        aspect_extension = au.prepare(plan, f, text_resources, previous_size, trace=aspect_trace,
+                                      border=aspect_border, border_diagnostic=aspect_border_diagnostic,border_lease=aspect_border_lease,
+                                      mask=aspect_mask, mask_trial=aspect_mask_trial)
         aspect_extension['template'] = child_templates[au.PAGE_INDEX]
         aspect_extension['root_row'] = 4 + int(modules) + int(bitrate)
+    group = None
+    if grouped:
+        order = [key for key, enabled in (('aspect', aspect), ('bitrate', bitrate),
+                                          ('sound', True), ('modules', modules)) if enabled]
+        previous_size = (aspect_extension['allocation_size'] if aspect else video['allocation_size']
+                         if video else extension['allocation_size'])
+        tables[SOUND_GROUP_INDEX] = plan.alloc(bytes(32))
+        metas[SOUND_GROUP_INDEX] = plan.alloc(bytes(28))
+        child_templates[SOUND_GROUP_INDEX] = plan.alloc(struct.pack('<11I',
+            (SOUND_GROUP_INDEX << 16) | 2, 0, 0, 0, tables[SOUND_GROUP_INDEX],
+            0, 0, 0, 0, 0, metas[SOUND_GROUP_INDEX]))
+        group = dict(order=order, page_offset=previous_size, allocation_size=previous_size+44,
+                     template=child_templates[SOUND_GROUP_INDEX],
+                     labels={'sound': SOUND_GROUP_TITLE_SLOT}, values={'sound': 54})
+        if aspect:
+            aspect_extension['root_row'] = order.index('aspect')
+            group['labels']['aspect'], group['values']['aspect'] = au.ROOT_SLOT, au.CURRENT_SLOT
+        if bitrate:
+            video['root_row'] = order.index('bitrate')
+            group['labels']['bitrate'], group['values']['bitrate'] = bu.ROOT_SLOT, bu.CURRENT_SLOT
+        if modules:
+            extension['root_row'] = order.index('modules')
+            group['labels']['modules'], group['values']['modules'] = mh.ROOT_SLOT, mh.STATUS_SLOT
+            plan.features['module_host']['root_row'] = extension['root_row']
     codes = audio_code(f, path_table, anchor_table)
     from .sound_settings import settings_code
     config_path = plan.alloc(b'A:\\WL-SOUND.CFG\0')
     codes.update(settings_code(f, config_path))
     codes.update(ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids,
-                         anchor_table, template, child_templates, extension, sidebar_parent=setup_parent, video=video, aspect=aspect_extension))
+                         anchor_table, template, child_templates, extension, sidebar_parent=setup_parent,
+                         video=video, aspect=aspect_extension, group=group))
     c = constant
     call = lambda name: invoke(f[name])
     owned_pages = [PAGE_INDEX, FILES_INDEX, SWITCH_INDEX, POPUP_INDEX]
@@ -109,6 +141,8 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False):
         owned_pages.append(bu.PAGE_INDEX)
     if aspect:
         owned_pages.append(au.PAGE_INDEX)
+    if grouped:
+        owned_pages.append(SOUND_GROUP_INDEX)
     codes['row'] = ui_text.row_code(f, SETUP_OBJECT, ENTRY_ID, owned_pages)
     setup_controls = im.read(setup_header[3], 38 * 28)
     entry = bytearray(setup_controls[-28:])
@@ -196,11 +230,13 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False):
         (SWITCH_INDEX, 2, 45, 58, 52, SWITCH_IDS),
         (POPUP_INDEX, 1, 66, 56, 40, (POPUP_ID,)),
     ]
+    category_ids = {}
     if modules:
         available = [i for i in range(0x2400,0x3000) if i not in used and i not in ROOT_IDS + FILE_IDS + SWITCH_IDS + (ENTRY_ID,)]
         if len(available) < 5:
             raise ValueError('No free module control IDs')
         module_ids = tuple(available[:4])
+        category_ids['modules'] = available[4]
         page_specs[0] = (PAGE_INDEX, 5, 41, 54, 40, ROOT_IDS + (available[4],))
         page_specs.append((mh.PAGE_INDEX, 4, mh.LABEL_SLOT, mh.EMPTY_SLOT, mh.TITLE_SLOT, module_ids))
         plan.features['module_host']['controls'] = list(module_ids)
@@ -209,6 +245,7 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False):
         ids = tuple(i for i in range(0x2400,0x3000) if i not in occupied)[:4]
         if len(ids) != 4:
             raise ValueError('No free bitrate control IDs')
+        category_ids['bitrate'] = ids[3]
         root = page_specs[0]
         page_specs[0] = (root[0],root[1]+1,*root[2:5],root[5]+(ids[3],))
         page_specs.append((bu.PAGE_INDEX,3,bu.LABEL_SLOT,bu.MARK_SLOT,bu.TITLE_SLOT,ids[:3]))
@@ -218,23 +255,35 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False):
         ids = tuple(i for i in range(0x2400,0x3000) if i not in occupied)[:8]
         if len(ids) != 8:
             raise ValueError('No free aspect control IDs')
+        category_ids['aspect'] = ids[7]
         root = page_specs[0]
         page_specs[0] = (root[0],root[1]+1,*root[2:5],root[5]+(ids[7],))
         page_specs.append((au.PAGE_INDEX,7,au.LABEL_SLOT,au.MARK_SLOT,au.TITLE_SLOT,ids[:7]))
         au.finish(plan,f,aspect_extension,ids[:7])
+    if grouped:
+        occupied = used | {ident for spec in page_specs for ident in spec[-1]}
+        category_ids['sound'] = next(i for i in range(0x2400,0x3000) if i not in occupied)
+        page_specs[0] = (PAGE_INDEX,len(group['order']),41,54,40,
+                         tuple(category_ids[key] for key in group['order']))
+        page_specs.append((SOUND_GROUP_INDEX,4,41,54,SOUND_GROUP_TITLE_SLOT,ROOT_IDS))
     for index, count, label, value, title, identifiers in page_specs:
+        is_root = index == PAGE_INDEX
+        is_sound_group = grouped and index == SOUND_GROUP_INDEX
+        is_module = modules and index == mh.PAGE_INDEX
         controls = bytearray()
         for i in range(count):
             control = bytearray(entry)
-            label_slot = (au.ROOT_SLOT if aspect and index == PAGE_INDEX and i == aspect_extension['root_row']
-                          else bu.ROOT_SLOT if bitrate and index == PAGE_INDEX and i == video['root_row']
-                          else mh.ROOT_SLOT if modules and index == PAGE_INDEX and i == 4 else label+i)
+            label_slot = group['labels'][group['order'][i]] if grouped and is_root else label+i
             struct.pack_into('<I', control, 0, label_slot)
             struct.pack_into('<I', control, 16, 0x1209)
-            value_slot = (au.CURRENT_SLOT if aspect and index == PAGE_INDEX and i == aspect_extension['root_row']
-                          else bu.CURRENT_SLOT if bitrate and index == PAGE_INDEX and i == video['root_row']
-                          else (mh.STATUS_SLOT if i == 2 else mh.EMPTY_SLOT) if modules and index == mh.PAGE_INDEX
-                          else value+i if index != PAGE_INDEX or i < 2 else 56)
+            if grouped and is_root:
+                value_slot = group['values'][group['order'][i]]
+            elif is_module:
+                value_slot = mh.STATUS_SLOT if i == 2 else mh.EMPTY_SLOT
+            elif is_root or is_sound_group:
+                value_slot = value+i if i<2 else 56
+            else:
+                value_slot = value+i
             struct.pack_into('<I', control, 20, value_slot)
             struct.pack_into('<I', control, 24, identifiers[i])
             controls.extend(control)
@@ -257,11 +306,15 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False):
         for row in range(count):
             y = 62 + row * 52
             boxes.extend((72, y, 702, y + 48))
-            video_row = index == PAGE_INDEX and ((bitrate and row == video['root_row']) or (aspect and row == aspect_extension['root_row']))
-            label_right = (350 if row < 2 or video_row else 696) if index == PAGE_INDEX else (350 if row == 2 else 696) if modules and index == mh.PAGE_INDEX else 550
+            if is_root or is_sound_group:
+                has_value = bool(grouped and is_root) or row < 2
+                label_right, value_left = (350,366) if has_value else (696,696)
+            elif is_module:
+                has_value = row == 2
+                label_right, value_left = (350,366) if has_value else (696,696)
+            else:
+                label_right, value_left = 550,570
             labels.extend((78, y + 4, label_right, y + 44))
-            has_value = (row < 2 or video_row if index == PAGE_INDEX else row == 2 if modules and index == mh.PAGE_INDEX else True)
-            value_left = (366 if index == PAGE_INDEX or modules and index == mh.PAGE_INDEX else 570) if has_value else 696
             # Native row composition clips its label at the value box even
             # when that box contains an empty string. Give label-only rows
             # a zero-width value box at the right edge.
@@ -295,9 +348,13 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False):
     plan.features['shutter_sound'] = {
         'functions': {k: hex(v | 1) for k, v in f.items()}, 'code_sizes': code_sizes,
         'pages': pages, 'state_anchor': hex(STATE_ANCHOR + 16), 'anchor_table': hex(anchor_table),
-        'page_template': hex(template), 'persistent_state_size': (aspect_extension['allocation_size'] if aspect else video['allocation_size'] if video else extension['allocation_size'] if extension else NEW_SIZE) + 31,
+        'page_template': hex(template), 'persistent_state_size': (group['allocation_size'] if grouped else NEW_SIZE) + 31,
         'root_parent': hex(setup_parent),
-        'page_offsets': {str(PAGE_INDEX): PAGE_OFFSET, str(FILES_INDEX): FILES_OFFSET, str(SWITCH_INDEX): SWITCH_OFFSET, str(POPUP_INDEX): POPUP_OFFSET, **({str(mh.PAGE_INDEX): mh.PAGE_OFFSET} if modules else {}), **({str(bu.PAGE_INDEX):video['page_offset']} if video else {}), **({str(au.PAGE_INDEX):aspect_extension['page_offset']} if aspect else {})},
+        'page_offsets': {str(PAGE_INDEX): PAGE_OFFSET, str(FILES_INDEX): FILES_OFFSET, str(SWITCH_INDEX): SWITCH_OFFSET, str(POPUP_INDEX): POPUP_OFFSET, **({str(mh.PAGE_INDEX): mh.PAGE_OFFSET} if modules else {}), **({str(bu.PAGE_INDEX):video['page_offset']} if video else {}), **({str(au.PAGE_INDEX):aspect_extension['page_offset']} if aspect else {}), **({str(SOUND_GROUP_INDEX):group['page_offset']} if grouped else {})},
+        'menu_categories': ([dict(key=key,row=row,control_id=category_ids[key],
+                                  page_index={'aspect':961,'bitrate':960,'sound':SOUND_GROUP_INDEX,'modules':958}[key])
+                             for row,key in enumerate(group['order'])] if grouped else []),
+        'sound_settings_page': SOUND_GROUP_INDEX if grouped else PAGE_INDEX,
         'control_identifiers': {str(index): list(identifiers) for index, _, _, _, _, identifiers in page_specs},
         'setup_entry_id': hex(ENTRY_ID), 'settings_count': 39,
         'setup_entry_controls': {'ascii': hex(controls_address), 'utf16': hex(unicode_controls)},

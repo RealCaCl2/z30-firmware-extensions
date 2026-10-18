@@ -93,6 +93,11 @@ def build_trial(stock, profile):
     # trim separately. All three JPEG size selections use this sensor crop.
     for i in range(3):
         pair(0x11571E30 + i * 4, (x, 0), f'normal horizontal trim {i}')
+        # Real capture with info+0x228 == 3 reads a separate direct table.
+        # Keep its native vertical alignment; only add the horizontal crop.
+        alternate = 0x11571DF4 + i * 4
+        native_y = struct.unpack('<2H', plan.image.read(alternate, 4))[1]
+        pair(alternate, (x, native_y), f'alternate horizontal trim {i}')
     candidate, report = plan.finish()
     report.update(profile=profile, ratio=[p, q], target_jpeg_wh=sizes,
                   target_large_in_dx_xywh=[x, y, width, height], geometry_edits=edits,
