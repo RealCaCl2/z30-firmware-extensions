@@ -1,6 +1,6 @@
 # v20：临时启用独立边框通道
 
-> 后续实机反馈：v21 单线已确认，但端部突出。用户要求稍细，新增 [v22 细线与端部调整](aspect-border-fine.md)，效果尚待真机确认。以下保留历史版本证据。
+> 后续实机反馈：v21 单线已确认，但端部突出。较细笔画实验见 [v22 细线与端部调整](aspect-border-fine.md)，效果尚待真机确认。以下保留历史版本证据。
 
 > 最新反馈：v20 黄框已在实机出现，但为双线；此前 4 像素笔画填满 8 像素条形的推断已被照片否定。见 [v21 笔画调整与验证边界](aspect-border-stroke.md)。以下为历史版本记录。
 
@@ -44,7 +44,7 @@
 
 SHA-256：`8d7d72d864a282d4d340f4655e0fd7be28b44ee701170894ae2ce55a1d0eb1e2`。
 
-这是既有加载流程使用的 EG 模块，不是 Nikon 外层更新容器。本轮只读取用户日志，没有写入相机或物理存储卡。
+这是既有加载流程使用的 EG 模块，不是 Nikon 外层更新容器。
 
 ```powershell
 python tools/build_aspect_border_trial.py --source Z_30_0120.bin `
@@ -54,7 +54,6 @@ python tools/build_aspect_border_trial.py --source Z_30_0120.bin `
 
 省略 `--lease-channel` 时，v17/v18/v19 对应构建仍与先前文件逐字节相同；默认构建没有启用独立边框或通道管理。
 
-## 验证与下一步
 
 证据位于 `build/research/aspect-border-v20/`，绑定上述文件 SHA-256。
 

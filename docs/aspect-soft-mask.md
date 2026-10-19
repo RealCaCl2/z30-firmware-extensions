@@ -1,10 +1,10 @@
 # 取景辅助改为轻微压暗裁切区
 
-> 2026-10-18：[v42](aspect-lifecycle-v42.md) 增加原厂取景阶段限制，并在绘制目标筛选之前清除旧遮幅。用户在本次回放修复复测后反馈“正常了”，记录为本次问题获机身确认；未提供逐档或完整生命周期覆盖。v37、v40 的失败及 v41 定位记录保留。
+> 2026-10-18：[v42](aspect-lifecycle-v42.md) 增加原厂取景阶段限制，并在绘制目标筛选之前清除旧遮幅。本次回放修复机身复测正常，记录为本次问题获机身确认；未提供逐档或完整生命周期覆盖。v37、v40 的失败及 v41 定位记录保留。
 
-日期：2026-10-18。用户认为粗黄框不美观，选择“轻微压暗裁切区，内部网格保留”。该方向替代继续缩细黄色矩形框的试验。目标是只对投影成片范围之外的可见区域叠加淡黑色，范围内不覆盖，保留原厂网格、状态图标与对焦框。早期建议起始值为 `48/255`；后经用户要求加深，当前值为 `128/255`。
+日期：2026-10-18。遮幅样式为轻微压暗裁切区并保留内部网格。该方向替代继续缩细黄色矩形框的试验。目标是只对投影成片范围之外的可见区域叠加淡黑色，范围内不覆盖，保留原厂网格、状态图标与对焦框。早期建议起始值为 `48/255`；后续版本加深，当前值为 `128/255`。
 
-> 交接：[aspect-handoff.md](aspect-handoff.md)。旧黄框路线（v17/v23 参数）保留在源码中，遮幅作为独立的实验开关存在，当前 `aspect-profiles` 与 `full` 已默认包含动态遮幅，无需单独预设。下文为显式试验工具及历史记录。
+> 技术索引：[aspect-handoff.md](aspect-handoff.md)。旧黄框路线（v17/v23 参数）保留在源码中，遮幅作为独立的实验开关存在，当前 `aspect-profiles` 与 `full` 已默认包含动态遮幅，无需单独预设。下文为显式试验工具及历史记录。
 
 ## 历史状态（v36，2026-10-18，以页首最新结果为准）
 
@@ -12,11 +12,10 @@
 
 ## v27 历史状态（2026-10-18）
 
-静态 trial 模式已接入真实构建并在 QEMU 端到端通过；动态模式已能构建，但几何来源尚未完成；尚未写相机验证。完整交接见 [aspect-handoff.md](aspect-handoff.md) 的“2026-10-18 v27 进展”一节。
+静态 trial 模式已接入真实构建并在 QEMU 端到端通过；动态模式已能构建，但几何来源尚未完成；尚未写相机验证。当前实现见 [多画幅说明](aspect-profiles.md)。
 
 - **v27 trial**：保留追加区 ROM state 供 QEMU 回放；sha256 `b61710121d396a97c70beda9aaa4bce74ce29a0ca6561954d416d381ce0791d6`（size 33,988,826，crc 0）。回放三阶段（inactive 基线 → active 带区 `[0,207,1]` → erased 基线）通过，证据 `build/research/mask-firmware-v27-trial-replay/`。
-- **v27 dynamic（未验证）**：原计划在 GPU submit 钩子里读原厂网格记录 `0xC201A7F4` 现算 4 个外区矩形，不持有 RAM 状态。但 QEMU 取景 fixture 没有启用原厂网格显示，网格钩子不运行、记录恒为 0，因此 `build/research/mask-firmware-v27-menu/` 的 PASS 是**空洞通过**（`mask-observations.json` 中 `grid_record` 全 0、`expected_regions` 全空），不能视为已验证。dynamic 构建 sha256 `96500acac62dd48a1518330dc738a5c3fcd76e48c55ed48661b2f2f71e76272f`。
-- **新证据**：`aspect_get` 在关闭扩展菜单后的 live view 仍可解析状态块（`build/research/aspect-get-live/context.json`，`state=0xc2c68138`）。据此下一步改为“profile→photo rect 的 ROM 表 + `aspect_get`”作为动态几何来源（不依赖网格显示，也不写 RAM），再重跑 QEMU 菜单验证。
+- **v27 dynamic（未验证）**：历史实现尝试在 GPU submit 钩子里读原厂网格记录 `0xC201A7F4` 现算 4 个外区矩形，不持有 RAM 状态。但 QEMU 取景 fixture 没有启用原厂网格显示，网格钩子不运行、记录恒为 0，因此 `build/research/mask-firmware-v27-menu/` 的 PASS 是**空洞通过**（`mask-observations.json` 中 `grid_record` 全 0、`expected_regions` 全空），不能视为已验证。dynamic 构建 sha256 `96500acac62dd48a1518330dc738a5c3fcd76e48c55ed48661b2f2f71e76272f`。
 
 ### v25 历史验证（保留）
 
@@ -56,5 +55,5 @@ python3 tools/run_built_firmware_qemu.py --report <EG209020.json> --firmware <EG
 
 - 已验证（QEMU 显示模型 + 实际构建产物回放）：遮幅位于 UI 之下、图标/括号/网格保留；alpha 48 的合成比例正确；提交级重复填充幂等；停用擦除后恢复基线；失败关闭时不会写入无关表面（image surface 指针校验高 4 位为 0xd）。
 - QEMU 色条是模型 fixture，不是传感器画面；模型不实现原厂 42 记录矩形硬件光栅，因此黄框双线/端帽与此处无关。
-- **未验证**：真机 alpha 观感与校准、真机缓存一致性、休眠/回放/HDMI/放大/对焦等生命周期、动态模式的实际接线（v27 计划改为 profile 表 + `aspect_get`，见交接）、真机网格开启/关闭与遮幅共存。动态模式当前不写 RAM state；trial 模式的 state 在追加区（相机会只读，仅用于回放验证）。
+- **未验证**：真机 alpha 观感与校准、真机缓存一致性、休眠/回放/HDMI/放大/对焦等生命周期、该历史动态模式的实际接线、真机网格开启/关闭与遮幅共存。动态模式当前不写 RAM state；trial 模式的 state 在追加区（相机会只读，仅用于回放验证）。
 - 当前普通构建仍走旧路线，未自动启用遮幅；本阶段没有新增可交付的遮幅 EG，也没有写真实相机或存储卡。

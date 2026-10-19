@@ -23,4 +23,4 @@ python tools/build_aspect_border_trial.py --source Z_30_0120.bin `
   --diagnostic --lease-channel
 ```
 
-本轮未写入相机或存储卡，没有重复执行未变菜单的 QEMU 回归。默认构建仍为 v17，以上是显式启用独立边框的试验文件。
+默认构建仍为 v17，以上是显式启用独立边框的试验文件。

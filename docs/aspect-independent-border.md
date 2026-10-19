@@ -1,6 +1,6 @@
 # v18 独立边框试验
 
-> 后续实机反馈：v21 单线已确认，但端部突出。用户要求稍细，新增 [v22 细线与端部调整](aspect-border-fine.md)，效果尚待真机确认。以下保留历史版本证据。
+> 后续实机反馈：v21 单线已确认，但端部突出。较细笔画实验见 [v22 细线与端部调整](aspect-border-fine.md)，效果尚待真机确认。以下保留历史版本证据。
 
 > 最新反馈：v20 黄框已在实机出现，但为双线；此前 4 像素笔画填满 8 像素条形的推断已被照片否定。见 [v21 笔画调整与验证边界](aspect-border-stroke.md)。以下为历史版本记录。
 
@@ -38,7 +38,7 @@ v19 是[边框定位版](aspect-border-diagnostic.md)，只补充阶段计数和
 
 SHA-256：`374d757cd4c964300e04e86ed734a39680354fbfa33f098b8b392410b37affba`。
 
-这是既有加载流程使用的 EG 模块，不是 Nikon 外层更新容器。本轮没有写入相机或物理存储卡。
+这是既有加载流程使用的 EG 模块，不是 Nikon 外层更新容器。
 
 ```powershell
 python tools/build_aspect_border_trial.py --source Z_30_0120.bin `

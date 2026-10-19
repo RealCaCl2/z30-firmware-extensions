@@ -71,6 +71,29 @@ Desktop.ini
 *.pfx
 .credentials*
 
+# Local agent state, conversation exports and private planning notes.
+.agents/
+.codex/
+.claude/
+/private/
+/notes/
+**/AGENTS.md
+**/CLAUDE.md
+**/*handoff*.md
+**/*implementation-plan*.md
+**/*roadmap*.md
+**/conversation*.json*
+**/chat-history*.json*
+**/rollout-*.jsonl
+*.session.json
+*.har
+*.pcap
+*.pcapng
+.netrc
+_netrc
+id_rsa*
+id_ed25519*
+
 # Camera diagnostic exports and raw private media.
 *.DBG
 *.dbg
