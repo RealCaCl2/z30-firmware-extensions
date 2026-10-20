@@ -9,7 +9,7 @@ from .sound_audio import audio_code
 from .sound_ui import ui_code
 
 
-def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False, aspect_border=False, aspect_border_diagnostic=False, aspect_border_lease=False, aspect_mask=False, aspect_mask_trial=False):
+def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_trace=False, aspect_border=False, aspect_border_diagnostic=False, aspect_border_lease=False, aspect_mask=False, aspect_mask_trial=False):
     im = plan.image
     if im.read(STATE_ANCHOR, 44) != bytes(44):
         raise ValueError('Sound state requires the unused stock page-zero slot')
@@ -31,7 +31,7 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False, as
     sizes['dismiss_error'] = 96
     if aspect:
         sizes.update(ensure=1024, getter=512, route=448, row=384)
-    grouped = bool(modules or bitrate or aspect)
+    grouped = bool(modules or bitrate or aspect or zebra)
     if grouped:
         sizes.update(ensure=1280, getter=640, route=640, action=1280)
     f = {name: plan.alloc(bytes(size)) for name, size in sizes.items()}
@@ -45,7 +45,7 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False, as
                  one='1.WAV', two='2.WAV', three='3.WAV', four='4.WAV', empty='', current='*',
                  missing='File not found', read='Read failed', invalid='Invalid WAV', close='Close failed',
                  busy='Sound busy', queue='Play failed', audio='Audio failed', ok='OK', save='Settings not saved')
-    if modules or bitrate or aspect:
+    if modules or bitrate or aspect or zebra:
         texts['entry'] = texts['title'] = 'Extensions'
     strings = {key: text_resources.alloc(text) for key, text in texts.items()}
     if grouped:
@@ -101,11 +101,21 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False, as
                                       mask=aspect_mask, mask_trial=aspect_mask_trial)
         aspect_extension['template'] = child_templates[au.PAGE_INDEX]
         aspect_extension['root_row'] = 4 + int(modules) + int(bitrate)
+    zebra_extension = None
+    if zebra:
+        from . import zebra_ui as zu
+        tables[zu.PAGE_INDEX], metas[zu.PAGE_INDEX] = plan.alloc(bytes(32)), plan.alloc(bytes(28))
+        child_templates[zu.PAGE_INDEX] = plan.alloc(struct.pack('<11I',
+            (zu.PAGE_INDEX << 16) | 2, 0, 0, 0, tables[zu.PAGE_INDEX], 0, 0, 0, 0, 0, metas[zu.PAGE_INDEX]))
+        previous_size = (aspect_extension['allocation_size'] if aspect else video['allocation_size']
+                         if video else extension['allocation_size'] if extension else NEW_SIZE)
+        zebra_extension = zu.prepare(plan, f, text_resources, previous_size)
+        zebra_extension['template'] = child_templates[zu.PAGE_INDEX]
     group = None
     if grouped:
-        order = [key for key, enabled in (('aspect', aspect), ('bitrate', bitrate),
+        order = [key for key, enabled in (('aspect', aspect), ('zebra', zebra), ('bitrate', bitrate),
                                           ('sound', True), ('modules', modules)) if enabled]
-        previous_size = (aspect_extension['allocation_size'] if aspect else video['allocation_size']
+        previous_size = (zebra_extension['allocation_size'] if zebra else aspect_extension['allocation_size'] if aspect else video['allocation_size']
                          if video else extension['allocation_size'])
         tables[SOUND_GROUP_INDEX] = plan.alloc(bytes(32))
         metas[SOUND_GROUP_INDEX] = plan.alloc(bytes(28))
@@ -118,6 +128,9 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False, as
         if aspect:
             aspect_extension['root_row'] = order.index('aspect')
             group['labels']['aspect'], group['values']['aspect'] = au.ROOT_SLOT, au.CURRENT_SLOT
+        if zebra:
+            zebra_extension['root_row'] = order.index('zebra')
+            group['labels']['zebra'], group['values']['zebra'] = zu.ROOT_SLOT, zu.CURRENT_SLOT
         if bitrate:
             video['root_row'] = order.index('bitrate')
             group['labels']['bitrate'], group['values']['bitrate'] = bu.ROOT_SLOT, bu.CURRENT_SLOT
@@ -131,7 +144,7 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False, as
     codes.update(settings_code(f, config_path))
     codes.update(ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids,
                          anchor_table, template, child_templates, extension, sidebar_parent=setup_parent,
-                         video=video, aspect=aspect_extension, group=group))
+                         video=video, aspect=aspect_extension, zebra=zebra_extension, group=group))
     c = constant
     call = lambda name: invoke(f[name])
     owned_pages = [PAGE_INDEX, FILES_INDEX, SWITCH_INDEX, POPUP_INDEX]
@@ -141,6 +154,8 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False, as
         owned_pages.append(bu.PAGE_INDEX)
     if aspect:
         owned_pages.append(au.PAGE_INDEX)
+    if zebra:
+        owned_pages.append(zu.PAGE_INDEX)
     if grouped:
         owned_pages.append(SOUND_GROUP_INDEX)
     codes['row'] = ui_text.row_code(f, SETUP_OBJECT, ENTRY_ID, owned_pages)
@@ -260,6 +275,16 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False, as
         page_specs[0] = (root[0],root[1]+1,*root[2:5],root[5]+(ids[7],))
         page_specs.append((au.PAGE_INDEX,7,au.LABEL_SLOT,au.MARK_SLOT,au.TITLE_SLOT,ids[:7]))
         au.finish(plan,f,aspect_extension,ids[:7])
+    if zebra:
+        occupied = used | {ident for spec in page_specs for ident in spec[-1]}
+        ids = tuple(i for i in range(0x2400,0x3000) if i not in occupied)[:3]
+        if len(ids) != 3:
+            raise ValueError('No free zebra control IDs')
+        category_ids['zebra'] = ids[2]
+        root = page_specs[0]
+        page_specs[0] = (root[0],root[1]+1,*root[2:5],root[5]+(ids[2],))
+        page_specs.append((zu.PAGE_INDEX,2,zu.LABEL_SLOT,zu.MARK_SLOT,zu.TITLE_SLOT,ids[:2]))
+        zu.finish(plan,f,zebra_extension,ids[:2])
     if grouped:
         occupied = used | {ident for spec in page_specs for ident in spec[-1]}
         category_ids['sound'] = next(i for i in range(0x2400,0x3000) if i not in occupied)
@@ -350,9 +375,9 @@ def add(plan, modules=False, bitrate=False, aspect=False, aspect_trace=False, as
         'pages': pages, 'state_anchor': hex(STATE_ANCHOR + 16), 'anchor_table': hex(anchor_table),
         'page_template': hex(template), 'persistent_state_size': (group['allocation_size'] if grouped else NEW_SIZE) + 31,
         'root_parent': hex(setup_parent),
-        'page_offsets': {str(PAGE_INDEX): PAGE_OFFSET, str(FILES_INDEX): FILES_OFFSET, str(SWITCH_INDEX): SWITCH_OFFSET, str(POPUP_INDEX): POPUP_OFFSET, **({str(mh.PAGE_INDEX): mh.PAGE_OFFSET} if modules else {}), **({str(bu.PAGE_INDEX):video['page_offset']} if video else {}), **({str(au.PAGE_INDEX):aspect_extension['page_offset']} if aspect else {}), **({str(SOUND_GROUP_INDEX):group['page_offset']} if grouped else {})},
+        'page_offsets': {str(PAGE_INDEX): PAGE_OFFSET, str(FILES_INDEX): FILES_OFFSET, str(SWITCH_INDEX): SWITCH_OFFSET, str(POPUP_INDEX): POPUP_OFFSET, **({str(mh.PAGE_INDEX): mh.PAGE_OFFSET} if modules else {}), **({str(bu.PAGE_INDEX):video['page_offset']} if video else {}), **({str(au.PAGE_INDEX):aspect_extension['page_offset']} if aspect else {}), **({str(zu.PAGE_INDEX):zebra_extension['page_offset']} if zebra else {}), **({str(SOUND_GROUP_INDEX):group['page_offset']} if grouped else {})},
         'menu_categories': ([dict(key=key,row=row,control_id=category_ids[key],
-                                  page_index={'aspect':961,'bitrate':960,'sound':SOUND_GROUP_INDEX,'modules':958}[key])
+                                  page_index={'zebra':963,'aspect':961,'bitrate':960,'sound':SOUND_GROUP_INDEX,'modules':958}[key])
                              for row,key in enumerate(group['order'])] if grouped else []),
         'sound_settings_page': SOUND_GROUP_INDEX if grouped else PAGE_INDEX,
         'control_identifiers': {str(index): list(identifiers) for index, _, _, _, _, identifiers in page_specs},

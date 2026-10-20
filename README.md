@@ -11,7 +11,7 @@ Wonder Lantern Z30 是 WonderLantern 组织面向 **Nikon Z30 C 1.20** 的实验
 
 ## 功能与预设
 
-`full` 包含下面全部八项功能。每项仍可独立选择或组合；`module-host` 自动包含 `shutter-sound`。
+`full` 包含下面全部九项功能。每项仍可独立选择或组合；`module-host` 自动包含 `shutter-sound`。
 
 | 预设 | 功能 |
 | --- | --- |
@@ -23,6 +23,9 @@ Wonder Lantern Z30 是 WonderLantern 组织面向 **Nikon Z30 C 1.20** 的实验
 | `video-rot` | 为新录像写入方向元数据，锁定开始录制时的方向。 |
 | `bitrate-slowmo-uncap` | 机内选择原始、均衡、高质量码率并记忆；慢动作录制上限 25 分钟，支持 FAT32 分段或 exFAT 大文件。 |
 | `aspect-profiles` | 同一菜单切换六种照片比例，包含半透明取景遮幅并保留原厂内部网格。[说明](docs/aspect-profiles.md) |
+| `photo-zebra` | 照片取景斑马纹；独立照片开关，复用原厂图案与阈值。[说明](docs/photo-zebra.md) |
+
+`photo-zebra`：将原厂实时斑马纹扩展到照片取景，复用原厂图案与八档阈值设置。已包含在 `full` 中，也可独立选择。通过“自定义菜单 → 照片高光显示”独立开启或关闭，默认关闭。照片取景、原厂样式/阈值和 JPEG/NEF 文件完整性已有机身验证；独立开关的机身验证尚未完成。[实现与验证范围](docs/photo-zebra.md)。
 
 `aspect-profiles` 是同一个自定义画幅预设，同时包含照片裁切和半透明取景遮幅；默认 `full` 包含它。遮幅按当前比例压暗成片范围外的区域，强度为 `128/255`（约 50%），内部网格与原厂图标保留；关闭网格仍显示遮幅，选择“关闭”恢复原厂画幅并清除遮幅。
 
@@ -64,11 +67,11 @@ python -c "from keystone import Ks; print('Keystone OK')"
 
 ### 3. 选择预设
 
-终端中省略预设时显示多选菜单：编号 **1–9** 依次为 `full` 和上表八项预设。输入编号或名称，以空格或逗号分隔；直接回车选择 `full`。
+终端中省略预设时显示多选菜单：编号 **1–10** 依次为 `full` 和上表九项预设（第 **10** 项为 `photo-zebra`）。输入编号或名称，以空格或逗号分隔；直接回车选择 `full`。
 
 - `2 4 5` 或 `liveview-dual,m900,mtp-fast`：同屏、M900、MTP 加速。
 - `6` 或 `module-host`：实验性模块宿主及其必需的声音框架。
-- `1` 或 `full`：全部八项功能，包含视频方向与高码率/慢动作扩展。
+- `1` 或 `full`：全部九项功能，包含视频方向与高码率/慢动作扩展。
 
 也可在命令行直接指定预设，多个名称用空格分隔：
 
@@ -99,7 +102,7 @@ python patch.py full --source "Z_30_0120.bin" --output "output/EG209020-full.BIN
 | 构建内容 | 英文入口 | 简体中文入口 | 繁体中文入口 |
 | --- | --- | --- | --- |
 | 仅声音框架 | `Shutter sound` | 快门声音 | 快門聲音 |
-| 包含画幅、码率或模块功能（如 `full`） | `Extensions` | 自定义菜单 | 自訂選單 |
+| 包含画幅、斑马纹、码率或模块功能（如 `full`） | `Extensions` | 自定义菜单 | 自訂選單 |
 | 模块页 | `SD Modules` | SD 卡功能 | SD 卡功能 |
 
 已修复标题缺失、标签被空值栏裁剪、左侧栏消失、返回后按钮残留，以及非中文入口和重启后首次进入的乱码。此前绘制和语言修复的机身复测正常；新增提示页和声音记忆也已获用户实机确认；QEMU 和原厂构造器的对照证据见 [UI 验证记录](docs/ui-qemu.md)。
@@ -175,12 +178,13 @@ python tools/prepare_module.py --example counter --output "output/CORE.ZMOD"
 
 | 范围 | 已记录证据 |
 | --- | --- |
-| 构建与回归 | 本次预设整合 53 项单元测试与六种构建组合检查通过，见[整合记录](docs/aspect-preset-integration.md)；历史 `shutter-sound`、`module-host`、`full` 的 CRC 与逐字节重复构建检查通过。 |
+| 构建与回归 | 当前 54 项单元测试通过；画幅整合的六种构建组合检查见[整合记录](docs/aspect-preset-integration.md)；历史 `shutter-sound`、`module-host`、`full` 的 CRC 与逐字节重复构建检查通过。 |
 | 菜单与语言 | QEMU 原生页面/构造器和 Unicorn 指令检查；此前绘制与语言修复有用户实机反馈。新增提示页与声音记忆已获用户实机确认。 |
 | 自定义画幅与遮幅 | v11 成片、v16 取景、v17 边界与网格共存及后续遮幅有对应用户反馈；v42 本次回放问题复测正常。详见[当前说明](docs/aspect-profiles.md)。 |
 | EG 安装、SD 宿主 | 维护者确认 Z30 C 1.20 安装以及 ZMOD 加载/运行。 |
 | 视频方向 | 独立预设有实机方向与录制中锁定反馈；覆盖边界见专题文档。 |
 | MTP 加速 | 已记录原厂对照的 590 条属性列表响应一致及查询耗时下降，数字与条件见验证文档。 |
+| 照片斑马纹 | 照片取景、原厂阈值/开关及 JPEG/NEF 文件完整性有机身验证；独立照片开关有 ARM 与三种语言 QEMU 菜单检查，尚待机身验证。 |
 | 码率与慢动作 | 历史固定高质量版本有实机文件检查；新增机内档位、均衡档和记忆功能已获用户实机确认。 |
 
 同屏、快门声音播放、M 档长曝光和多画幅均已获用户实机确认。构建报告中的 `camera_verified: false` 表示**脚本本身没有执行机身测试**，实机反馈另行记录。EG 安装记录不等于任意生成产物均已验证；本工具也不构建完整 Nikon 更新包。
@@ -203,6 +207,7 @@ python -m unittest discover -s tests -v
 | --- | --- |
 | [离线构建指引](PATCH_GUIDE.md) | 准备文件、菜单选择、产物与常见错误。 |
 | [构建说明](docs/build.md) | 输入身份、解码、预设组合与补丁流程。 |
+| [照片取景斑马纹](docs/photo-zebra.md) | 独立开关、原厂图案与阈值、偏好保存及验证范围。 |
 | [画幅与半透明遮幅](docs/aspect-profiles.md) | 六种比例、输出尺寸、取景遮幅与验证边界。 |
 | [v42 回放修复](docs/aspect-lifecycle-v42.md) | 生命周期限制、旧遮幅清理及用户复测。 |
 | [声音说明](docs/shutter-sound.md) | 声音菜单、触发条件、文件格式和状态。 |

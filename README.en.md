@@ -13,7 +13,7 @@ The earlier general report of all features working was subsequently corrected by
 
 ## Features and presets
 
-`full` includes all eight features below. Select features individually or combine them; `module-host` automatically includes `shutter-sound`.
+`full` includes all nine features below. Select features individually or combine them; `module-host` automatically includes `shutter-sound`.
 
 | Preset | Feature |
 | --- | --- |
@@ -25,6 +25,9 @@ The earlier general report of all features working was subsequently corrected by
 | `video-rot` | Write orientation metadata for new recordings and lock the orientation captured at recording start. |
 | `bitrate-slowmo-uncap` | Select and remember Stock, Balanced, or High quality bitrates; extend slow-motion recording to 25 minutes with FAT32 splitting or large exFAT files. |
 | `aspect-profiles` | Six photo ratios and a translucent live-view mask in one preset, preserving the interior stock grid. [Details](docs/aspect-profiles.md) |
+| `photo-zebra` | Photo live-view zebra with an independent switch and native pattern/threshold controls. [Details](docs/photo-zebra.md) |
+
+`photo-zebra` reuses native highlight patterns and eight threshold levels in photo live view. It is included in `full` and can also be selected individually. Extensions → Photo zebra → OFF/ON controls photo live view independently (default OFF). Photo zebra, native controls and JPEG/NEF integrity have hardware coverage; the independent switch still requires hardware validation. [Implementation and evidence](docs/photo-zebra.md).
 
 Sound and module menus support Simplified Chinese, Traditional Chinese, and English fallback. Current builds do not add a Camera Status page.
 
@@ -66,11 +69,11 @@ python -c "from keystone import Ks; print('Keystone OK')"
 
 ### 3. Select presets
 
-Omitting presets in an interactive terminal displays a selection menu. Options **1–9** are `full`, followed by the eight presets in the table above. Enter numbers or names separated by spaces or commas; an empty response selects `full`.
+Omitting presets in an interactive terminal displays a selection menu. Options **1–10** are `full`, followed by the nine presets in the table above (option **10** is `photo-zebra`). Enter numbers or names separated by spaces or commas; an empty response selects `full`.
 
 - `2 4 5` or `liveview-dual,m900,mtp-fast`: combined display, M900, and MTP acceleration.
 - `6` or `module-host`: the experimental module host and its required sound framework.
-- `1` or `full`: all eight features, including orientation and bitrate/slow-motion changes.
+- `1` or `full`: all nine features, including orientation and bitrate/slow-motion changes.
 
 Alternatively, specify presets directly on the command line, separated by spaces:
 
@@ -177,12 +180,13 @@ Offline results and user hardware reports are separate. Evidence for one preset 
 
 | Scope | Recorded evidence |
 | --- | --- |
-| Builds and regressions | 53 unit tests and six build combinations passed for this preset integration; see [integration details](docs/aspect-preset-integration.md). Historical CRC and byte-for-byte reproducibility passed for `shutter-sound`, `module-host`, and `full`. |
+| Builds and regressions | 54 unit tests pass. The aspect integration has six build-combination checks; see [integration details](docs/aspect-preset-integration.md). Historical CRC and byte-for-byte reproducibility passed for `shutter-sound`, `module-host`, and `full`. |
 | Menus and language | Native QEMU pages/constructors and Unicorn instruction checks; the user reported the preceding drawing/language version working on hardware. New message-page and preferences behavior still needs hardware validation. |
 | Custom aspects and mask | Hardware feedback covers specific capture, live-view, boundary/grid and mask fixes; the latest v42 playback retest was reported normal. See [current details](docs/aspect-profiles.md). |
 | EG installation and SD host | Maintainer confirmation of Z30 C 1.20 installation and ZMOD loading/execution. |
 | Video orientation | Hardware feedback for the standalone preset's orientation and recording-time lock; see the dedicated coverage notes. |
 | MTP acceleration | 590 property-list responses matched stock, with reduced query times; conditions and numbers are in the verification document. |
+| Photo zebra | Photo live view, native controls and JPEG/NEF integrity have hardware coverage. The independent photo switch has ARM and three-language native QEMU menu checks; its hardware validation is pending. |
 | Bitrates and slow motion | Earlier fixed High quality builds have hardware file checks; runtime profiles, Balanced, and persistence still need camera validation. |
 
 Hardware results for combined histogram/level display, shutter-sound playback, and M-mode extended exposure are not individually recorded in the verification document. `camera_verified: false` means **the build script itself did not perform a camera test**; hardware feedback is recorded separately. Reported EG installation does not establish that every generated image has been tested. This tool does not build complete Nikon update packages.
@@ -205,6 +209,7 @@ Detailed documents are currently mainly in Chinese. The [Chinese README](README.
 | --- | --- |
 | [Build guide](PATCH_GUIDE.md) | Inputs, menu selection, outputs, and common errors. |
 | [Build details](docs/build.md) | Identity, decoding, preset combinations, and patch workflow. |
+| [Photo live-view zebra](docs/photo-zebra.md) | Independent switch, native patterns/thresholds, preferences and validation scope. |
 | [Custom aspects and translucent mask](docs/aspect-profiles.md) | Six ratios, output dimensions, live-view behavior and evidence boundaries. |
 | [v42 playback fix](docs/aspect-lifecycle-v42.md) | Lifecycle gate, stale-mask retirement and user retest. |
 | [Sound details](docs/shutter-sound.md) | Menus, trigger conditions, format, and state. |

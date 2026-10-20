@@ -11,6 +11,7 @@ SIMPLIFIED, TRADITIONAL = 26, 27
 # choose the stock Hans font 2 / Hant font 0 in the runtime style copy.
 UNICODE_STYLE = 120
 TRANSLATIONS = {
+    'Photo zebra': ('照片高光显示', '照片高光顯示'),
     'Photo aspect': ('照片画幅', '照片畫幅'),
     'OFF (stock)': ('关闭', '關閉'),
     'Video bitrate': ('视频码率', '影片位元率'),
