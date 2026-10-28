@@ -1,6 +1,5 @@
 # Wonder Lantern Z30
 
-> 2026-10-18：[v42](docs/aspect-lifecycle-v42.md) 增加原厂取景阶段限制，并在绘制目标筛选之前清除旧遮幅。
 
 
 **简体中文** · [English](README.en.md)
