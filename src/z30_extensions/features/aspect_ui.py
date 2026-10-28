@@ -367,6 +367,8 @@ def prepare(plan, f, resources, allocation_size, *, trace=False, border=False, b
         else:
             from .aspect_trace import install
         trace_info=install(plan,f,codes,sizes)
+    from .aspect_raw_playback import install as install_raw_playback
+    raw_playback = install_raw_playback(plan, f, codes, sizes, profiles)
     from .aspect_mask import STATE_SIZE as MASK_STATE_SIZE
     mask_extra = MASK_STATE_SIZE if mask else 0
     if mask:mask_offset = state_offset+16
@@ -376,6 +378,7 @@ def prepare(plan, f, resources, allocation_size, *, trace=False, border=False, b
                 trace=trace_info, border=border, border_cache_offset=border_cache_offset if border else None,
                 border_diagnostic=border_diagnostic,
                 border_lease=border_lease, mask=mask, mask_trial=mask_trial, mask_state=mask_state,
+                raw_playback=raw_playback,
                 codes=codes,geometry_table=geometry_table,selectors=selectors,
                 function_names=list(codes),shadows=copies,sizes=sizes,profiles=profiles)
 
@@ -393,6 +396,7 @@ def finish(plan, f, extension, identifiers):
         config_magic=hex(MAGIC),config_version=2,
         preview_geometry_version=2,
         playback_isolation_version=1,
+        raw_preview_playback=extension['raw_playback'],
         file_geometry_callers=[hex(v) for v in FILE_GEOMETRY_CALLERS],
         narrow_source_window_version=0,
         native_area_sync_version=1,
