@@ -9,7 +9,12 @@ from .sound_audio import audio_code
 from .sound_ui import ui_code
 
 
-def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_trace=False, aspect_border=False, aspect_border_diagnostic=False, aspect_border_lease=False, aspect_mask=False, aspect_mask_trial=False):
+def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, wireless=False, aspect_trace=False, aspect_border=False, aspect_border_diagnostic=False, aspect_border_lease=False, aspect_mask=False, aspect_mask_trial=False, precapture_probe=False):
+    if precapture_probe and (wireless or bitrate):
+        raise ValueError('JPG capture probe needs the independent experimental page slot')
+    if wireless and bitrate:
+        raise ValueError('Wireless research menu and bitrate menu currently share one owned page slot')
+    bitrate = bitrate or wireless or precapture_probe
     im = plan.image
     if im.read(STATE_ANCHOR, 44) != bytes(44):
         raise ValueError('Sound state requires the unused stock page-zero slot')
@@ -79,7 +84,12 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
         extension['template'] = child_templates[mh.PAGE_INDEX]
     video = None
     if bitrate:
-        from . import bitrate_ui as bu
+        if precapture_probe:
+            from . import precapture_probe as bu
+        elif wireless:
+            from . import wireless_ui as bu
+        else:
+            from . import bitrate_ui as bu
         bt = plan.alloc(bytes(32))
         bm = plan.alloc(bytes(28))
         tables[bu.PAGE_INDEX], metas[bu.PAGE_INDEX] = bt, bm
@@ -263,8 +273,15 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
         category_ids['bitrate'] = ids[3]
         root = page_specs[0]
         page_specs[0] = (root[0],root[1]+1,*root[2:5],root[5]+(ids[3],))
-        page_specs.append((bu.PAGE_INDEX,3,bu.LABEL_SLOT,bu.MARK_SLOT,bu.TITLE_SLOT,ids[:3]))
-        bu.finish(plan,f,video,ids[:3])
+        # Wireless research uses four choices, while the video selector has three.
+        choice_count = 4 if wireless else 3
+        if wireless:
+            occupied = used | {ident for spec in page_specs for ident in spec[-1]}
+            choices = tuple(i for i in range(0x2400,0x3000) if i not in occupied)[:4]
+        else:
+            choices = ids[:3]
+        page_specs.append((bu.PAGE_INDEX,choice_count,bu.LABEL_SLOT,bu.MARK_SLOT,bu.TITLE_SLOT,choices))
+        bu.finish(plan,f,video,choices)
     if aspect:
         occupied = used | {ident for spec in page_specs for ident in spec[-1]}
         ids = tuple(i for i in range(0x2400,0x3000) if i not in occupied)[:8]

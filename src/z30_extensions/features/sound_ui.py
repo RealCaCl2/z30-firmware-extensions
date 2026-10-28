@@ -31,7 +31,7 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
         video_copy = f"""{constant('r5',video['page_offset'])}add r5,r4,r5;mov r0,r5;
             {constant('r1',video['template'])}movs r2,#44;{invoke(0x10199bdc,thumb=False)}
             add r0,r4,#{PAGE_OFFSET};str r0,[r5,#4];
-            {constant('r5',video['state_offset'])}add r5,r4,r5;movs r0,#2;str r0,[r5];mvn r0,#0;str r0,[r5,#4];"""
+            {constant('r5',video['state_offset'])}add r5,r4,r5;movs r0,#{video.get('default',2)};str r0,[r5];mvn r0,#0;str r0,[r5,#4];"""
         video_restore = invoke(f['bitrate_restore'])
         video_labels = invoke(f['bitrate_labels'])
         getter_check += f"{constant('r12',bu.PAGE_INDEX)}cmp r1,r12;beq bitrate_page;"
