@@ -13,7 +13,7 @@ The earlier general report of all features working was subsequently corrected by
 
 ## Features and presets
 
-`full` includes all nine features below. Select features individually or combine them; `module-host` automatically includes `shutter-sound`.
+`full` includes all ten features below, including Wi-Fi 5 GHz region unlocking. Select features individually or combine them; `module-host` automatically includes `shutter-sound`.
 
 | Preset | Feature |
 | --- | --- |
@@ -26,6 +26,9 @@ The earlier general report of all features working was subsequently corrected by
 | `bitrate-slowmo-uncap` | Select and remember Stock, Balanced, or High quality bitrates; extend slow-motion recording to 25 minutes with FAT32 splitting or large exFAT files. |
 | `aspect-profiles` | Six photo ratios and a translucent live-view mask in one preset, preserving the interior stock grid. [Details](docs/aspect-profiles.md) |
 | `photo-zebra` | Photo live-view zebra with an independent switch and native pattern/threshold controls. [Details](docs/photo-zebra.md) |
+| `wifi-5ghz` | Wi-Fi profile-7 US/-1 country request for 5 GHz STA; included in full and available separately. |
+
+Build with `python patch.py wifi-5ghz --source "Z_30_0120.bin" --output "output/EG209020-wifi-5ghz.BIN"`, or select `full` to include all features. Interactive option 11 selects this preset. Only profile 7 and the unset-index fallback change; no persistent sales-region or NVRAM write is made. Camera AP support, throughput and negotiated bandwidth remain unproven. Effective channels and power must suit the place of use. The standalone preset only needs the Python standard library.
 
 `photo-zebra` reuses native highlight patterns and eight threshold levels in photo live view. It is included in `full` and can also be selected individually. Extensions → Photo zebra → OFF/ON controls photo live view independently (default OFF). Photo zebra, native controls and JPEG/NEF integrity have hardware coverage; the independent switch still requires hardware validation. [Implementation and evidence](docs/photo-zebra.md).
 
@@ -69,11 +72,11 @@ python -c "from keystone import Ks; print('Keystone OK')"
 
 ### 3. Select presets
 
-Omitting presets in an interactive terminal displays a selection menu. Options **1–10** are `full`, followed by the nine presets in the table above (option **10** is `photo-zebra`). Enter numbers or names separated by spaces or commas; an empty response selects `full`.
+Omitting presets in an interactive terminal displays a selection menu. Options **1–11** are `full`, followed by the ten presets in the table above (option **10** is `photo-zebra`; option **11** is `wifi-5ghz`). Enter numbers or names separated by spaces or commas; an empty response selects `full`.
 
 - `2 4 5` or `liveview-dual,m900,mtp-fast`: combined display, M900, and MTP acceleration.
 - `6` or `module-host`: the experimental module host and its required sound framework.
-- `1` or `full`: all nine features, including orientation and bitrate/slow-motion changes.
+- `1` or `full`: all ten features, including orientation and bitrate/slow-motion changes.
 
 Alternatively, specify presets directly on the command line, separated by spaces:
 

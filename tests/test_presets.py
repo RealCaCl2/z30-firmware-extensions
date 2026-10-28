@@ -10,6 +10,15 @@ from z30_extensions.cli import choose_presets, main
 
 
 class PresetTests(unittest.TestCase):
+    def test_wifi_5ghz_is_in_full_and_composes_without_duplicates(self):
+        self.assertIn('wifi-5ghz', PRESETS)
+        self.assertEqual(resolve_presets('wifi-5ghz')[1], ['wifi-5ghz'])
+        self.assertIn('wifi-5ghz', resolve_presets('full')[1])
+        self.assertEqual(resolve_presets(['wifi-5ghz', 'full', 'wifi-5ghz'])[1],
+                         resolve_presets('full')[1])
+        with patch('builtins.input', return_value='11'), patch('sys.stdout', new=io.StringIO()):
+            self.assertEqual(choose_presets(), ['wifi-5ghz'])
+
     def test_photo_zebra_is_in_full_and_composes_without_duplicates(self):
         self.assertIn('photo-zebra', PRESETS)
         self.assertIn('photo-zebra', resolve_presets('full')[1])
@@ -39,13 +48,13 @@ class PresetTests(unittest.TestCase):
         selected, features = resolve_presets(['shutter-sound', 'full', 'm900', 'full'])
         self.assertEqual(selected, ['shutter-sound', 'full', 'm900'])
         self.assertEqual(features, ['liveview-dual', 'm900', 'shutter-sound', 'mtp-fast', 'module-host', 'video-rot',
-                          'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra'])
+                          'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz'])
         self.assertEqual(resolve_presets(['modular', 'full'])[1], features)
 
     def test_full_enables_all_features_and_modular_keeps_its_scope(self):
         self.assertEqual(resolve_presets('full')[1],
                          ['liveview-dual', 'm900', 'shutter-sound', 'mtp-fast', 'module-host', 'video-rot',
-                          'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra'])
+                          'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz'])
         self.assertEqual(resolve_presets('modular')[1],
                          ['liveview-dual', 'm900', 'shutter-sound', 'module-host'])
         self.assertEqual(resolve_presets(['full', 'mtp-fast', 'modular'])[1],
@@ -56,7 +65,7 @@ class PresetTests(unittest.TestCase):
                          ['liveview-dual', 'm900'])
         self.assertEqual(resolve_presets(['mtp-fast', 'full'])[1],
                          ['liveview-dual', 'm900', 'shutter-sound', 'mtp-fast', 'module-host', 'video-rot',
-                          'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra'])
+                          'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz'])
 
     def test_invalid_and_empty_selection(self):
         for selection in ([], 'unknown', ['full', 'unknown']):

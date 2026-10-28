@@ -6,10 +6,10 @@ from .platform.z30_120 import BASE
 
 
 PRESETS = ('full', 'liveview-dual', 'shutter-sound', 'm900', 'mtp-fast', 'module-host', 'video-rot',
-           'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra')
+           'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz')
 LEGACY_PRESETS = ('modular',)
 FEATURE_ORDER = ('liveview-dual', 'm900', 'shutter-sound', 'mtp-fast', 'module-host', 'video-rot',
-                 'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra')
+                 'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz')
 FULL_FEATURES = FEATURE_ORDER
 MODULAR_FEATURES = ('liveview-dual', 'm900', 'shutter-sound', 'module-host')
 
@@ -90,6 +90,9 @@ def build(source, preset='full', *, aspect_trace=False, aspect_border=False,
         add(plan)
     if 'photo-zebra' in features:
         from .features.photo_zebra import add
+        add(plan)
+    if 'wifi-5ghz' in features:
+        from .features.wifi_5ghz import add
         add(plan)
     output, report = plan.finish()
     for address, expected in VIDEO_STOCK_WINDOWS:

@@ -11,7 +11,7 @@ Wonder Lantern Z30 是 WonderLantern 组织面向 **Nikon Z30 C 1.20** 的实验
 
 ## 功能与预设
 
-`full` 包含下面全部九项功能。每项仍可独立选择或组合；`module-host` 自动包含 `shutter-sound`。
+`full` 包含下面全部十项功能，包括 Wi-Fi 5 GHz 地区解锁。每项仍可独立选择或组合；`module-host` 自动包含 `shutter-sound`。
 
 | 预设 | 功能 |
 | --- | --- |
@@ -24,6 +24,9 @@ Wonder Lantern Z30 是 WonderLantern 组织面向 **Nikon Z30 C 1.20** 的实验
 | `bitrate-slowmo-uncap` | 机内选择原始、均衡、高质量码率并记忆；慢动作录制上限 25 分钟，支持 FAT32 分段或 exFAT 大文件。 |
 | `aspect-profiles` | 同一菜单切换六种照片比例，包含半透明取景遮幅并保留原厂内部网格。[说明](docs/aspect-profiles.md) |
 | `photo-zebra` | 照片取景斑马纹；独立照片开关，复用原厂图案与阈值。[说明](docs/photo-zebra.md) |
+| `wifi-5ghz` | Wi-Fi 5 GHz 地区解锁：无线配置 7 请求 US/-1，包含在 full 中，也可单独选择。 |
+
+`wifi-5ghz` 仅替换无线配置 7（含未保存编号的回落），不写整机销售地区或 NVRAM。其他配置编号保持原样；不保证相机自身建立 5 GHz 热点、提速或实际协商带宽。驱动的有效信道与功率需适合使用地点。单独构建只需 Python 标准库。
 
 `photo-zebra`：将原厂实时斑马纹扩展到照片取景，复用原厂图案与八档阈值设置。已包含在 `full` 中，也可独立选择。通过“自定义菜单 → 照片高光显示”独立开启或关闭，默认关闭。照片取景、原厂样式/阈值和 JPEG/NEF 文件完整性已有机身验证；独立开关的机身验证尚未完成。[实现与验证范围](docs/photo-zebra.md)。
 
@@ -67,16 +70,18 @@ python -c "from keystone import Ks; print('Keystone OK')"
 
 ### 3. 选择预设
 
-终端中省略预设时显示多选菜单：编号 **1–10** 依次为 `full` 和上表九项预设（第 **10** 项为 `photo-zebra`）。输入编号或名称，以空格或逗号分隔；直接回车选择 `full`。
+终端中省略预设时显示多选菜单：编号 **1–11** 依次为 `full` 和上表十项预设（第 **10** 项为 `photo-zebra`，第 **11** 项为 `wifi-5ghz`）。输入编号或名称，以空格或逗号分隔；直接回车选择 `full`。
 
 - `2 4 5` 或 `liveview-dual,m900,mtp-fast`：同屏、M900、MTP 加速。
 - `6` 或 `module-host`：实验性模块宿主及其必需的声音框架。
-- `1` 或 `full`：全部九项功能，包含视频方向与高码率/慢动作扩展。
+- `1` 或 `full`：全部十项功能，包含视频方向与高码率/慢动作扩展。
 
 也可在命令行直接指定预设，多个名称用空格分隔：
 
 ```powershell
 python patch.py liveview-dual m900 mtp-fast --source "Z_30_0120.bin" --output "output/EG209020-custom.BIN"
+python patch.py wifi-5ghz --source "Z_30_0120.bin" --output "output/EG209020-wifi-5ghz.BIN"
+python patch.py full wifi-5ghz --source "Z_30_0120.bin" --output "output/EG209020-full-wifi-5ghz.BIN"
 python patch.py full --source "Z_30_0120.bin" --output "output/EG209020-full.BIN"
 ```
 
