@@ -13,6 +13,7 @@ from ..assembly import assemble, invoke
 
 BLOCK_FLAG = 0x574C5554
 FS_OPEN, FS_READ, FS_CLOSE = 0x102C89C4, 0x102C8A3A, 0x102C89EE
+FS_SEEK = 0x102C8A98  # (fd, offset, whence, out_ptr); whence 2 reports the size
 WL3L_MAGIC = 0x4C334C57
 MAX_LUT_SIZE = 65
 SD_SLOT_SIZE = (22 + 6 * MAX_LUT_SIZE ** 3 + 7) & ~7
@@ -197,11 +198,11 @@ def sd_load_source():
     """sd_load(control, workspace) -> 0 success, 1 open, 2 I/O, 3 parse, 4 bounds.
 
     Exclusive ownership required. Failed loads preserve active pointer/length.
-    Reads accept short chunks; zero-byte success is EOF. A buffer that fills
-    exactly reports 4 without probing, because a one-byte probe read returned
-    end-of-file on the device and truncated the input. Each open gets one close
-    attempt. r1 returns -1 when closed/no open, otherwise the handle a caller
-    must retain and close later.
+    The length comes from seek(END), so the transfer stops at the real end of
+    file instead of at the first short read; the device answered zero bytes once
+    its first chunk was in. A file larger than the input buffer reports 4. Each
+    open gets one close attempt. r1 returns -1 when closed/no open, otherwise the
+    handle a caller must retain and close later.
     Read/close success must be 0; close failure always reports I/O, not capacity.
     """
     return (
@@ -221,17 +222,24 @@ def sd_load_source():
         'sd_checked: ldr r0, [r5, #16]; movs r1, #0; movs r2, #0;'
         + invoke(FS_OPEN) +
         'movs r11, #1; cmp r0, #0; blt sd_return; mov r10, r0;'
-        'movs r5, #0; movs r11, #2;'
-        'sd_read: subs r2, r7, r5; cmp r2, #0; beq sd_buffer_full;'
-        'cmp r2, #65536; bls sd_chunk; mov.w r2, #65536;'
+        'movs r5, #0; movs r11, #2; mov.w r0, #4096; str r0, [sp, #16];'
+        # The file size comes from seek(END) and decides both the buffer request
+        # and the read length, so a short transfer cannot pass for end of file.
+        'mov r0, r10; movs r1, #0; movs r2, #2; add r3, sp, #8; movs r12, #0;'
+        'str r12, [sp, #8];' + invoke(FS_SEEK) +
+        'cmp r0, #0; bne sd_close_error; ldr r0, [sp, #8]; cmp r0, #0; blt sd_close_error;'
+        'cmp r0, r7; bhi sd_buffer_full; str r0, [sp, #12];'
+        'sd_read: ldr r1, [sp, #12]; subs r2, r1, r5; beq sd_read_done;'
+        # Position is re-established before every transfer: the device answered
+        # zero bytes once the first chunk was in, which truncated the input.
+        'mov r0, r10; mov r1, r5; movs r2, #0; add r3, sp, #8;' + invoke(FS_SEEK) +
+        'cmp r0, #0; bne sd_close_error;'
+        'ldr r2, [sp, #12]; subs r2, r2, r5; ldr r3, [sp, #16]; cmp r2, r3; bls sd_chunk; mov r2, r3;'
         'sd_chunk: str r2, [sp, #4]; add r1, r6, r5; mov r0, r10; mov r3, sp;'
         'movs r12, #0; str r12, [sp];' + invoke(FS_READ) +
         'cmp r0, #0; bne sd_close_error; ldr r0, [sp]; ldr r1, [sp, #4];'
-        'cmp r0, r1; bhi sd_close_error; cmp r0, #0; beq sd_read_done;'
+        'cmp r0, r1; bhi sd_close_error; cmp r0, #0; beq sd_close_error;'
         'adds r5, r5, r0; b sd_read;'
-        # A full buffer means the file may be longer; ask for a bigger one. The
-        # one-byte probe this replaces reported end-of-file on the device, which
-        # truncated the read and surfaced as an invalid LUT instead of growing.
         'sd_buffer_full: movs r11, #4; b sd_close_error;'
         'sd_read_done: mov r0, r10;' + invoke(FS_CLOSE) +
         'cmp r0, #0; bne sd_return; mov.w r10, #-1; movs r11, #3;'

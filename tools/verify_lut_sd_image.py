@@ -40,9 +40,10 @@ class Fixture(Context):
         self.events, self.labels, self.label_records, self.display = [], {}, {}, []
         self.content, self.offset, self.chunk, self.error, self.handle = table_text().encode(), 0, 19, None, 17
         self.file_live, self.in_pixels, self.validator_hits, self.cache_calls = False, False, 0, []
+        self.reads = 0
         self.seed(0x1129, 2)
         endpoints = (lut_session.ALLOCATE, lut_session.RELEASE, lut_sdload.FS_OPEN,
-                     lut_sdload.FS_READ, lut_sdload.FS_CLOSE, 0x103382A2,
+                     lut_sdload.FS_READ, lut_sdload.FS_CLOSE, lut_sdload.FS_SEEK, 0x103382A2,
                      lut_core.CACHE_INVALIDATE, lut_core.CACHE_CLEAN, lut_core.DISPLACED_CALL,
                      self.f['text'] & ~1, self.f['text_entry'] & ~1, self.f['render'] & ~1, 0x1045F732)
         for address in set(endpoints):
@@ -54,7 +55,8 @@ class Fixture(Context):
     def service(self, u, address, size, unused):
         args = registers(u, 4)
         if address in (lut_session.ALLOCATE, lut_session.RELEASE,
-                       lut_sdload.FS_OPEN, lut_sdload.FS_READ, lut_sdload.FS_CLOSE):
+                       lut_sdload.FS_OPEN, lut_sdload.FS_READ, lut_sdload.FS_CLOSE,
+                       lut_sdload.FS_SEEK):
             assert not self.in_pixels, 'pixel worker reached heap/filesystem boundary'
         if address == lut_session.ALLOCATE:
             assert args[1] == 0
@@ -68,7 +70,8 @@ class Fixture(Context):
         elif address == lut_session.RELEASE:
             assert args[0] in self.live
             del self.live[args[0]]; returning(u)
-        elif address in (lut_sdload.FS_OPEN, lut_sdload.FS_READ, lut_sdload.FS_CLOSE):
+        elif address in (lut_sdload.FS_OPEN, lut_sdload.FS_READ, lut_sdload.FS_CLOSE,
+                       lut_sdload.FS_SEEK):
             if address == lut_sdload.FS_OPEN:
                 assert not self.file_live
             else:

@@ -57,8 +57,9 @@ class Fixture:
         self.content = b''
         self.offset = 0
         self.chunk = 65536
+        self.reads = 0
         self.error = None
-        for address in (sd.FS_OPEN, sd.FS_READ, sd.FS_CLOSE):
+        for address in (sd.FS_OPEN, sd.FS_READ, sd.FS_CLOSE, sd.FS_SEEK):
             self.u.hook_add(UC_HOOK_CODE, self.boundary, begin=address, end=address)
 
     def boundary(self, u, address, size, unused):
@@ -69,11 +70,19 @@ class Fixture:
             self.events.append(dict(kind='open', mode=mode, attr=attr))
             self.offset = 0
             returning(u, 0xA0000001 if self.error == 'open' else 17)
+        elif address == sd.FS_SEEK:
+            fd, offset, whence, out = registers(u, 4)
+            assert fd == 17 and whence in (0, 2)
+            self.offset = len(self.content) if whence == 2 else offset
+            self.events.append(dict(kind='seek', whence=whence, offset=offset))
+            put(u, out, self.offset)
+            returning(u)
         elif address == sd.FS_READ:
             fd, dest, requested, actual = registers(u, 4)
             assert fd == 17 and requested > 0
+            self.reads += 1
             self.events.append(dict(kind='read', requested=requested))
-            if self.error == 'read' and self.offset:
+            if self.error == 'read' and self.reads > 1:
                 returning(u, 0xA0000002)
                 return
             count = min(requested, self.chunk, len(self.content) - self.offset)
@@ -98,6 +107,7 @@ class Fixture:
         if active is not None:
             put(self.u, ARENA + 4, active)
         self.content, self.error, self.chunk, self.offset = content, error, chunk, 0
+        self.reads = 0
         self.events.clear()
         before = bytes(self.u.mem_read(ARENA + 4, 12))
         result = self.c.call(CODE, (ARENA, workspace), limit=max(30_000_000, len(content) * 100))
@@ -164,9 +174,9 @@ def run(data):
         assert f.load(text.encode(), error=error, chunk=13) == expected
         rows.append(dict(case=error, rejected=True, calls=list(f.events)))
     for name, kwargs, expected in [
-        # A buffer that fills exactly cannot be told apart from a truncated read
-        # without probing, so it asks for a larger one and the session grows.
-        ('exact_input_capacity', dict(read_cap=len(binary)), 4),
+        # The size from seek(END) decides the request, so a buffer that matches
+        # the file exactly is a success; one byte short is still a bounds error.
+        ('exact_input_capacity', dict(read_cap=len(binary)), 0),
         ('overflow_input', dict(read_cap=len(binary) - 1), 4),
         ('output_small', dict(out_cap=len(binary) - 1), 3),
         ('active_candidate', dict(active=ARENA + f.layout['sd_slot']), 4),

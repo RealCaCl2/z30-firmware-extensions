@@ -99,6 +99,12 @@ def good_vectors():
          '大小扫描约 59 KB'),
         ('sweep-15-swap.cube', cube_text('Swap R/B 15', 15, rows_swap_rb(15)).encode(), 15,
          '大小扫描约 91 KB'),
+        ('sweep-3-swap.cube', cube_text('Swap R/B 3', 3, rows_swap_rb(3)).encode(), 3,
+         '大小扫描约 730 B'),
+        ('sweep-4-swap.cube', cube_text('Swap R/B 4', 4, rows_swap_rb(4)).encode(), 4,
+         '大小扫描约 1.7 KB'),
+        ('sweep-6-swap.cube', cube_text('Swap R/B 6', 6, rows_swap_rb(6)).encode(), 6,
+         '大小扫描约 5.8 KB'),
     ]
 
 
