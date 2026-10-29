@@ -82,6 +82,16 @@ def good_vectors():
         ('swap-rb-33.cube', cube_text('Swap R/B 33', 33, rows_swap_rb(33)).encode(), 33,
          '同 swap-rb-17，用于比较表尺寸对耗时的影响'),
         ('swap-rb-17.wl3l', binary_of(swap17), 17, '二进制 WL3L 路径，效果同 swap-rb-17'),
+        # 最小表：红蓝互换是线性映射，2³ 的三线性插值即为精确互换，因此这几张表
+        # 与 17³ 等效，只用于把「读不到内容」与「表太大/读不完」区分开。
+        ('tiny-2-swap.cube', cube_text('Swap R/B 2', 2, rows_swap_rb(2)).encode(), 2,
+         '最小合法文本表（8 行）：能加载则说明读取与解析都通，问题在大小'),
+        ('tiny-5-swap.cube', cube_text('Swap R/B 5', 5, rows_swap_rb(5)).encode(), 5,
+         '小表（125 行）：与 tiny-2 配合判断是否与文件长度相关'),
+        ('tiny-2-swap.wl3l', binary_of(cube_text('Swap R/B 2', 2, rows_swap_rb(2))), 2,
+         '最小二进制表（70 字节）：文本与二进制同时失败则与格式无关'),
+        ('tiny-5-swap.wl3l', binary_of(cube_text('Swap R/B 5', 5, rows_swap_rb(5))), 5,
+         '小二进制表（772 字节）'),
     ]
 
 
