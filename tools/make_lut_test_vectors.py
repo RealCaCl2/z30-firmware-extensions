@@ -92,6 +92,13 @@ def good_vectors():
          '最小二进制表（70 字节）：文本与二进制同时失败则与格式无关'),
         ('tiny-5-swap.wl3l', binary_of(cube_text('Swap R/B 5', 5, rows_swap_rb(5))), 5,
          '小二进制表（772 字节）'),
+        # 大小扫描：同样精确的互换，只是表长不同，用来找设备的读取边界。
+        ('sweep-9-swap.cube', cube_text('Swap R/B 9', 9, rows_swap_rb(9)).encode(), 9,
+         '大小扫描约 30 KB'),
+        ('sweep-13-swap.cube', cube_text('Swap R/B 13', 13, rows_swap_rb(13)).encode(), 13,
+         '大小扫描约 59 KB'),
+        ('sweep-15-swap.cube', cube_text('Swap R/B 15', 15, rows_swap_rb(15)).encode(), 15,
+         '大小扫描约 91 KB'),
     ]
 
 
