@@ -11,6 +11,18 @@ SIMPLIFIED, TRADITIONAL = 26, 27
 # choose the stock Hans font 2 / Hant font 0 in the runtime style copy.
 UNICODE_STYLE = 120
 TRANSLATIONS = {
+    'Photo LUT': ('照片 LUT', '照片 LUT'),
+    'Load SD LUT': ('加载 SD LUT', '載入 SD LUT'),
+    'Use embedded LUT': ('使用内置 LUT', '使用內建 LUT'),
+    'Disable and release': ('关闭并释放', '關閉並釋放'),
+    'Disabled': ('已关闭', '已關閉'),
+    'Embedded LUT': ('内置 LUT', '內建 LUT'),
+    'SD LUT ready': ('SD LUT 已就绪', 'SD LUT 已就緒'),
+    'Invalid LUT': ('无效的 LUT', '無效的 LUT'),
+    'LUT too large': ('LUT 文件过大', 'LUT 檔案過大'),
+    'Cleanup pending': ('等待释放资源', '等待釋放資源'),
+    'Loaded; cleanup pending': ('已加载，等待释放资源', '已載入，等待釋放資源'),
+    'File access failed': ('访问文件失败', '存取檔案失敗'),
     'Wi-Fi buffer': ('Wi-Fi \u53d1\u9001', 'Wi-Fi \u50b3\u9001'),
     '64 KiB (stock)': ('64 KiB (stock)', '64 KiB (stock)'),
     'Photo zebra': ('照片高光显示', '照片高光顯示'),

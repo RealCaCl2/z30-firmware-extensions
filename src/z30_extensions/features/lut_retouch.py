@@ -19,9 +19,9 @@ GATE = (0x1025FB8E, bytes.fromhex('002810b50ad00446fff7'),
 
 def add(plan, cube_text=None, size=17, flag=lut_core.LUT_FLAG):
     """Install the LUT gate; embeds an identity table when cube_text is None."""
+    embedded_identity = cube_text is None
     if cube_text is None:
         cube_text = lut.identity_cube(size)
-    embedded_identity = cube_text is None
     parsed = lut.parse_cube(cube_text)
     binary = lut.pack_binary(parsed['size'], parsed['domain_min'],
                              parsed['domain_max'], parsed['table'])

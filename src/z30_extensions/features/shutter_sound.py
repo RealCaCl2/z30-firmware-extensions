@@ -9,12 +9,14 @@ from .sound_audio import audio_code
 from .sound_ui import ui_code
 
 
-def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, wireless=False, aspect_trace=False, aspect_border=False, aspect_border_diagnostic=False, aspect_border_lease=False, aspect_mask=False, aspect_mask_trial=False, precapture_probe=False):
+def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, wireless=False, aspect_trace=False, aspect_border=False, aspect_border_diagnostic=False, aspect_border_lease=False, aspect_mask=False, aspect_mask_trial=False, precapture_probe=False, lut_sd=False, lut_cube_text=None, lut_size=17):
+    if lut_sd and (wireless or bitrate or precapture_probe):
+        raise ValueError('SD LUT research menu requires the independent experimental page slot')
     if precapture_probe and (wireless or bitrate):
         raise ValueError('JPG capture probe needs the independent experimental page slot')
     if wireless and bitrate:
         raise ValueError('Wireless research menu and bitrate menu currently share one owned page slot')
-    bitrate = bitrate or wireless or precapture_probe
+    bitrate = bitrate or wireless or precapture_probe or lut_sd
     im = plan.image
     if im.read(STATE_ANCHOR, 44) != bytes(44):
         raise ValueError('Sound state requires the unused stock page-zero slot')
@@ -84,7 +86,9 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, wireless=
         extension['template'] = child_templates[mh.PAGE_INDEX]
     video = None
     if bitrate:
-        if precapture_probe:
+        if lut_sd:
+            from . import lut_ui as bu
+        elif precapture_probe:
             from . import precapture_probe as bu
         elif wireless:
             from . import wireless_ui as bu
@@ -95,7 +99,11 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, wireless=
         tables[bu.PAGE_INDEX], metas[bu.PAGE_INDEX] = bt, bm
         child_templates[bu.PAGE_INDEX] = plan.alloc(struct.pack('<11I',
             (bu.PAGE_INDEX << 16) | 2, 0, 0, 0, bt, 0, 0, 0, 0, 0, bm))
-        video = bu.prepare(plan, f, text_resources, extension['allocation_size'] if extension else NEW_SIZE)
+        if lut_sd:
+            video = bu.prepare(plan, f, text_resources, extension['allocation_size'] if extension else NEW_SIZE,
+                               cube_text=lut_cube_text, size=lut_size)
+        else:
+            video = bu.prepare(plan, f, text_resources, extension['allocation_size'] if extension else NEW_SIZE)
         video['template'] = child_templates[bu.PAGE_INDEX]
         video['root_row'] = 5 if modules else 4
     aspect_extension = None
@@ -274,8 +282,8 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, wireless=
         root = page_specs[0]
         page_specs[0] = (root[0],root[1]+1,*root[2:5],root[5]+(ids[3],))
         # Wireless research uses four choices, while the video selector has three.
-        choice_count = 4 if wireless else 3
-        if wireless:
+        choice_count = 4 if wireless or lut_sd else 3
+        if wireless or lut_sd:
             occupied = used | {ident for spec in page_specs for ident in spec[-1]}
             choices = tuple(i for i in range(0x2400,0x3000) if i not in occupied)[:4]
         else:

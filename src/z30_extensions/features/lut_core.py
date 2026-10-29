@@ -19,7 +19,7 @@ per-pixel parity in Unicorn before any firmware is produced.
 """
 import struct
 
-from ..assembly import assemble
+from ..assembly import assemble, invoke
 
 LUT_FLAG = 0x574C5554          # 'WLUT'
 BLOCK_HEADER = 8               # flag word + reserved word before the payload
@@ -230,34 +230,83 @@ def _cache_call(address, base_slot, stride_slot):
             + _call('r12', address))
 
 
-def _gate_source(block_address, processing, displaced_call):
+def _gate_source(block_address, processing, displaced_call, session_lock=False):
     # The stock window covers cmp/push/beq/mov plus the first half of the
     # validator bl, so the stock path replicates all of it (r12 clobber is
     # safe: the worker does not hold r12 across the processing call). The
     # append area sits far outside Thumb BL range, so the replicated call
     # goes through r12.
+    acquire = release = extra = ''
+    if session_lock:
+        acquire = (
+            'cmp r4, #0; beq gate_null;'
+            f'movw r1, #{(block_address + 24) & 65535}; movt r1, #{(block_address + 24) >> 16};'
+            'movs r12, #8; gate_lock_loop: ldrex r2, [r1]; cmp r2, #0; bne gate_busy;'
+            'movs r2, #1; strex r3, r2, [r1]; cmp r3, #0; beq gate_locked;'
+            'subs r12, #1; bne gate_lock_loop; b gate_busy; gate_locked: dmb sy;')
+        release = (
+            f'movw r1, #{(block_address + 24) & 65535}; movt r1, #{(block_address + 24) >> 16};'
+            'dmb sy; movs r2, #0; str r2, [r1];')
+        extra = ('gate_busy: clrex; movs r0, #0; str r0, [r4, #0x14]; pop {r4, pc};'
+                 'gate_null: movs r0, #0; pop {r4, pc};')
     return (f'push {{r4, lr}}; mov r4, r0;'
             f'movw r1, #{block_address & 0xFFFF}; movt r1, #{block_address >> 16};'
             f'ldr r1, [r1]; cmp r1, #0; beq gate_stock;'
-            f'mov r0, r4; bl lut_core; str r0, [r4, #0x14]; pop {{r4, pc}};'
+            + acquire +
+            f'mov r0, r4; bl lut_core; str r0, [r4, #0x14];'
+            + release + 'pop {r4, pc};'
             f'gate_stock: cmp r0, #0; beq gate_pass; mov r0, r4;'
             f'movw r12, #{displaced_call & 0xFFFF}; movt r12, #{displaced_call >> 16};'
             f'blx r12;'
             f'ldr.w pc, ={processing + 12 | 1};'
-            f'gate_pass: pop {{r4, pc}};')
+            f'gate_pass: pop {{r4, pc}};' + extra)
+
+
+def _getter_gate_source(getter, processing, displaced_call):
+    """Resolve a RAM session without allocating or doing file I/O in the worker."""
+    return (
+        'push {r4, lr}; mov r4, r0;' + invoke(getter) +
+        'cmp r0, #0; beq getter_stock; mov r1, r0; ldr r2, [r1];'
+        'cmp r2, #0; beq getter_stock; cmp r4, #0; beq getter_null;'
+        'sub sp, #8; str r1, [sp]; adds r1, #24; movs r12, #8;'
+        'getter_lock: ldrex r2, [r1]; cmp r2, #0; bne getter_busy;'
+        'movs r2, #1; strex r3, r2, [r1]; cmp r3, #0; beq getter_locked;'
+        'subs r12, #1; bne getter_lock; b getter_busy;'
+        'getter_locked: dmb sy; ldr r1, [sp]; mov r0, r4; bl lut_core;'
+        'str r0, [r4, #0x14]; ldr r1, [sp]; movs r2, #0; dmb sy; str r2, [r1, #24];'
+        'add sp, #8; pop {r4, pc};'
+        'getter_busy: clrex; movs r0, #0; str r0, [r4, #0x14]; add sp, #8; pop {r4, pc};'
+        'getter_stock: mov r0, r4; cmp r0, #0; beq getter_null;'
+        + invoke(displaced_call) + f'ldr.w pc, ={processing + 12 | 1};'
+        'getter_null: movs r0, #0; pop {r4, pc};')
 
 
 def build_lut_core(block_address, gate_address, processing=STOCK_PROCESSING,
                    displaced_call=DISPLACED_CALL,
-                   cache_invalidate=CACHE_INVALIDATE, cache_clean=CACHE_CLEAN):
+                   cache_invalidate=CACHE_INVALIDATE, cache_clean=CACHE_CLEAN,
+                   active_payload=False, session_lock=False, block_getter=None):
     """One assembly unit: gate + lut_core + lut_lookup, assembled at gate_address.
 
     Returns code bytes; the feature patches the stock processing entry with a
     jump to gate_address, and the block data must land at block_address.
+    active_payload=True reads an absolute WL3L pointer from block+4, suitable
+    for lut_sdload's RAM control. Default retains the embedded block+8 ABI.
+    Caller must serialize loading against processing and hold the payload.
+    session_lock=True shares lut_session's +24 lock for the full core call;
+    a busy gate returns 0 and never accesses table/pixels or clears the owner.
+    block_getter optionally resolves a pinned RAM session at runtime without
+    allocation/I/O; the gate passes that same session to the private core in r1.
     """
-    source = (_gate_source(block_address, processing, displaced_call)
+    if session_lock and not active_payload:
+        raise ValueError('Session locking requires the active-payload ABI')
+    if block_getter is not None and not (active_payload and session_lock):
+        raise ValueError('A dynamic session getter requires active payload and session locking')
+    gate = (_getter_gate_source(block_getter, processing, displaced_call) if block_getter is not None
+            else _gate_source(block_address, processing, displaced_call, session_lock))
+    source = (gate
               + 'lut_core: '
               + f'push {{r4-r11, lr}}; sub sp, #{CORE_FRAME};'
+              + ('str r1, [sp, #32];' if block_getter is not None else '')
               + f'mov r4, r0; cmp r4, #0; beq core_fail;'
               f'ldr r5, [r4, #4]; ldr r6, [r4, #0x10]; cmp r5, #0; beq core_fail; cmp r6, #0; beq core_fail;'
               f'ldrb r0, [r5]; cmp r0, #1; bne core_fail;'
@@ -275,8 +324,11 @@ def build_lut_core(block_address, gate_address, processing=STOCK_PROCESSING,
               f'ldr r0, [r5, #0x18]; str r0, [sp, #{S_CIN}];'
               f'ldr r0, [r6, #0x14]; str r0, [sp, #{S_YOUT}];'
               f'ldr r0, [r6, #0x18]; str r0, [sp, #{S_COUT}];'
-              f'movw r7, #{block_address & 0xFFFF}; movt r7, #{block_address >> 16};'
-              f'ldrh r0, [r7, #14];'
+              + ('ldr r7, [sp, #32];' if block_getter is not None else
+                 f'movw r7, #{block_address & 0xFFFF}; movt r7, #{block_address >> 16};')
+              + ('ldr r7, [r7, #4]; cmp r7, #0; beq core_fail; subs r7, #8;'
+                 if active_payload else '')
+              + f'ldrh r0, [r7, #14];'
               # x0 must be even for interleaved chroma pairs
               f'ldrh r0, [sp, #{S_X0}]; lsrs r0, r0, #1; lsls r0, r0, #1;'
               f'ldrh r1, [sp, #{S_X0}]; cmp r0, r1; bne core_fail;'

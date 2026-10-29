@@ -108,9 +108,9 @@ def bounded_call(c, entry, args, stop):
         raise AssertionError('Expected an intentional stop in the original stage table')
 
 
-def effect_to_main_encode(data):
+def effect_to_main_encode(data, image=None):
     """Two adjacent original phases, with explicit stops before derived images."""
-    c = Context(data, data)
+    c = Context(data, data if image is None else image)
     for address, size in ((0xC2351AD4, 0x800), (0xC235222C, 0x28), (0xC2359330, 0x180)):
         c.map(address, size)
     u = c.u
@@ -118,8 +118,8 @@ def effect_to_main_encode(data):
         (0x1000, 0x6000, 0x7000, 0xB000, 0xB100, 0xB200, 0xB300, 0xB400, 0xC000, 0xC400, 0xD000)]
     y_in, c_in, y_out, c_out, compressed = [RAM + x for x in (0x20000, 0x21000, 0x22000, 0x23000, 0x30000)]
     stock = StockImage(data)
-    phase4 = stock.words(stock.words(SAVE_TABLE + 4 * 4, 1)[0] + 0x14, 1)[0]
-    phase5 = stock.words(stock.words(SAVE_TABLE + 5 * 4, 1)[0] + 0x14, 1)[0]
+    phase4 = word(u, word(u, SAVE_TABLE + 4 * 4) + 0x14)
+    phase5 = word(u, word(u, SAVE_TABLE + 5 * 4) + 0x14)
     events, stopped_at, failed = [], 0, False
 
     def boundary(uc, address, size, unused):
