@@ -672,3 +672,31 @@ v4 镜像（`E338FF7B…`）加载 132,684 字节的表，状态行显示「访�
 ### 下一轮判读
 
 若仍报状态 2，说明长度拿到了但读停住，下一步要在读停住时关闭并重新打开文件、再 seek 到断点续读；若改报状态 3，说明 seek 不可用而走了流式分支，需要换一条获取长度的路径。
+
+## 第十五轮：D-Lighting 不在 index 6 上，激活改为固定 RAM 单元（2026-10-29）
+
+### 真机现象
+
+v5 加载 132,684 字节的 `WL-LUT.CUBE` 成功（状态行「SD LUT 已就绪」），但在修饰里选「D-Lighting」后，保存出来的副本只有 D-Lighting 效果，没有 LUT。
+
+### 定位
+
+- 钩子本来就在处理器入口：`src/z30_extensions/features/lut_retouch.py:16` 的 `GATE = (0x1025FB8E, ..., 'Index-6 effect processing entry (retouch ops 5/6/7)')`。该函数的参数对象是 `+4` 输入描述符、`+0x10` 输出描述符、`+0x14` 结果。
+- 操作表 `0x115CD6CC` 按 `op*8` 索引、`op 0x20` 结束、`0x21` 起是系数数据：操作 5/6/7 构造内部索引 6（单色／棕褐／青色族），操作 1 构造内部索引 0（D-Lighting）。索引表 `0x11F926F0`–`0x11F92708` 的第 6 项是 `0x1025FB8F`，全镜像只有这一处字面引用。
+- 结论：点 D-Lighting 时我们的钩子根本不在调用路径上，现象自洽；单色打开后的三个变体都走索引 6。
+
+### 修改
+
+- `src/z30_extensions/features/lut_core.py` 新增 `_cell_gate_source`，`build_lut_core(..., cell=None)` 在给定单元时用它：从固定单元读会话指针 → 校验 `[session] != 0` → 锁 `session+24` → 把会话放进 r1 调核心；`dynamic` 统一控制核心是否保存 r1。
+- `src/z30_extensions/features/lut_ui.py` 新增 `ACTIVATION_CELL = STATE_ANCHOR + 24`（`0xC1832D3C`，未使用的 page-0 描述符：`+16` 是块锚点、`+20` 是打开锁、`+24` 空着）。`bitrate_action` 在提交成功后写入会话指针、禁用时清零；`bitrate_restore` 在页面初始化时清零，避免旧指针悬挂。
+- 门控不再调用 `bitrate_get`，因此与菜单页是否还开着无关。
+
+### 验证
+
+`verify_lut_sd_image.py` 29 例（新增断言：加载后单元等于会话、禁用后为 0）、`verify_lut_session.py` 42 例、`verify_lut_sdload.py` 58 例、`verify_lut_core_native.py` 4 例、单元测试 23 例全部通过。
+
+新镜像 `output/lut-sd-menu-v6/EG209020.BIN`：33,999,570 字节，SHA-256 `342642E9517BE066142AA54A26C739F0F8B6BE7F27FC46B81D559CCDD8FF3598`，追加块 60,056 字节，13 处原地改写，`crc_residue=0`，`camera_verified=false`。
+
+### 下一轮判读
+
+修饰里选「单色」任一变体：输出灰／棕褐／青色说明门控没接管（激活单元没写进去，或该处理入口没被调用）；输出红蓝互换的彩色图说明接管成功。仍是灰图时需要探针镜像，在门控里记录单元值与调用计数。

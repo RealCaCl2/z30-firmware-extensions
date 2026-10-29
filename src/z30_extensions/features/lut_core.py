@@ -281,10 +281,36 @@ def _getter_gate_source(getter, processing, displaced_call):
         'getter_null: movs r0, #0; pop {r4, pc};')
 
 
+def _cell_gate_source(cell, processing, displaced_call):
+    """Resolve a RAM session through one owned pointer word, not the page state.
+
+    The menu stores the live session pointer into a fixed word when it commits a
+    table and clears that word when it releases one, so the gate keeps working in
+    contexts where the settings page is closed and its state anchor is gone.
+    """
+    return (
+        'push {r4, lr}; mov r4, r0;'
+        f'movw r1, #{cell & 0xFFFF}; movt r1, #{cell >> 16}; ldr r1, [r1];'
+        'cmp r1, #0; beq cell_stock; ldr r2, [r1]; cmp r2, #0; beq cell_stock;'
+        'cmp r4, #0; beq cell_null;'
+        'sub sp, #8; str r1, [sp]; adds r1, #24; movs r12, #8;'
+        'cell_lock: ldrex r2, [r1]; cmp r2, #0; bne cell_busy;'
+        'movs r2, #1; strex r3, r2, [r1]; cmp r3, #0; beq cell_locked;'
+        'subs r12, #1; bne cell_lock; b cell_busy;'
+        'cell_locked: dmb sy; ldr r1, [sp]; mov r0, r4; bl lut_core;'
+        'str r0, [r4, #0x14]; ldr r1, [sp]; movs r2, #0; dmb sy; str r2, [r1, #24];'
+        'add sp, #8; pop {r4, pc};'
+        'cell_busy: clrex; movs r0, #0; str r0, [r4, #0x14]; add sp, #8; pop {r4, pc};'
+        'cell_stock: mov r0, r4; cmp r0, #0; beq cell_null;'
+        + invoke(displaced_call) + f'ldr.w pc, ={processing + 12 | 1};'
+        'cell_null: movs r0, #0; pop {r4, pc};')
+
+
 def build_lut_core(block_address, gate_address, processing=STOCK_PROCESSING,
                    displaced_call=DISPLACED_CALL,
                    cache_invalidate=CACHE_INVALIDATE, cache_clean=CACHE_CLEAN,
-                   active_payload=False, session_lock=False, block_getter=None):
+                   active_payload=False, session_lock=False, block_getter=None,
+                   cell=None):
     """One assembly unit: gate + lut_core + lut_lookup, assembled at gate_address.
 
     Returns code bytes; the feature patches the stock processing entry with a
@@ -296,17 +322,28 @@ def build_lut_core(block_address, gate_address, processing=STOCK_PROCESSING,
     a busy gate returns 0 and never accesses table/pixels or clears the owner.
     block_getter optionally resolves a pinned RAM session at runtime without
     allocation/I/O; the gate passes that same session to the private core in r1.
+    cell resolves the same session from one owned pointer word instead, which
+    keeps the gate independent of the settings page staying open.
     """
     if session_lock and not active_payload:
         raise ValueError('Session locking requires the active-payload ABI')
     if block_getter is not None and not (active_payload and session_lock):
         raise ValueError('A dynamic session getter requires active payload and session locking')
-    gate = (_getter_gate_source(block_getter, processing, displaced_call) if block_getter is not None
-            else _gate_source(block_address, processing, displaced_call, session_lock))
+    if cell is not None and block_getter is not None:
+        raise ValueError('Resolve the session through either a cell or a getter, not both')
+    if cell is not None and not (active_payload and session_lock):
+        raise ValueError('A pointer cell requires active payload and session locking')
+    if cell is not None:
+        gate = _cell_gate_source(cell, processing, displaced_call)
+    elif block_getter is not None:
+        gate = _getter_gate_source(block_getter, processing, displaced_call)
+    else:
+        gate = _gate_source(block_address, processing, displaced_call, session_lock)
+    dynamic = block_getter is not None or cell is not None
     source = (gate
               + 'lut_core: '
               + f'push {{r4-r11, lr}}; sub sp, #{CORE_FRAME};'
-              + ('str r1, [sp, #32];' if block_getter is not None else '')
+              + ('str r1, [sp, #32];' if dynamic else '')
               + f'mov r4, r0; cmp r4, #0; beq core_fail;'
               f'ldr r5, [r4, #4]; ldr r6, [r4, #0x10]; cmp r5, #0; beq core_fail; cmp r6, #0; beq core_fail;'
               f'ldrb r0, [r5]; cmp r0, #1; bne core_fail;'
@@ -324,7 +361,7 @@ def build_lut_core(block_address, gate_address, processing=STOCK_PROCESSING,
               f'ldr r0, [r5, #0x18]; str r0, [sp, #{S_CIN}];'
               f'ldr r0, [r6, #0x14]; str r0, [sp, #{S_YOUT}];'
               f'ldr r0, [r6, #0x18]; str r0, [sp, #{S_COUT}];'
-              + ('ldr r7, [sp, #32];' if block_getter is not None else
+              + ('ldr r7, [sp, #32];' if dynamic else
                  f'movw r7, #{block_address & 0xFFFF}; movt r7, #{block_address >> 16};')
               + ('ldr r7, [r7, #4]; cmp r7, #0; beq core_fail; subs r7, #8;'
                  if active_payload else '')
