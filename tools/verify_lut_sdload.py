@@ -58,6 +58,7 @@ class Fixture:
         self.offset = 0
         self.chunk = 65536
         self.reads = 0
+        self.no_seek = False
         self.error = None
         for address in (sd.FS_OPEN, sd.FS_READ, sd.FS_CLOSE, sd.FS_SEEK):
             self.u.hook_add(UC_HOOK_CODE, self.boundary, begin=address, end=address)
@@ -73,6 +74,12 @@ class Fixture:
         elif address == sd.FS_SEEK:
             fd, offset, whence, out = registers(u, 4)
             assert fd == 17 and whence in (0, 2)
+            if self.no_seek:
+                # Unsupported call: the loader must fall back to streaming.
+                put(u, out, 0)
+                self.events.append(dict(kind='seek', whence=whence, offset=offset))
+                returning(u)
+                return
             self.offset = len(self.content) if whence == 2 else offset
             self.events.append(dict(kind='seek', whence=whence, offset=offset))
             put(u, out, self.offset)
@@ -96,7 +103,8 @@ class Fixture:
             self.events.append(dict(kind='close'))
             returning(u, 0xA0000003 if self.error == 'close' else 0)
 
-    def load(self, content, error=None, chunk=65536, read_cap=None, out_cap=None, active=None):
+    def load(self, content, error=None, chunk=65536, read_cap=None, out_cap=None, active=None,
+             no_seek=False):
         self.u.mem_write(ARENA, self.block)
         layout = self.layout
         workspace = ARENA + layout['workspace']
@@ -108,6 +116,7 @@ class Fixture:
             put(self.u, ARENA + 4, active)
         self.content, self.error, self.chunk, self.offset = content, error, chunk, 0
         self.reads = 0
+        self.no_seek = no_seek
         self.events.clear()
         before = bytes(self.u.mem_read(ARENA + 4, 12))
         result = self.c.call(CODE, (ARENA, workspace), limit=max(30_000_000, len(content) * 100))
@@ -177,6 +186,7 @@ def run(data):
         # The size from seek(END) decides the request, so a buffer that matches
         # the file exactly is a success; one byte short is still a bounds error.
         ('exact_input_capacity', dict(read_cap=len(binary)), 0),
+        ('stream_without_seek', dict(no_seek=True), 0),
         ('overflow_input', dict(read_cap=len(binary) - 1), 4),
         ('output_small', dict(out_cap=len(binary) - 1), 3),
         ('active_candidate', dict(active=ARENA + f.layout['sd_slot']), 4),

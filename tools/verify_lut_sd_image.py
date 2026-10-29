@@ -41,6 +41,7 @@ class Fixture(Context):
         self.content, self.offset, self.chunk, self.error, self.handle = table_text().encode(), 0, 19, None, 17
         self.file_live, self.in_pixels, self.validator_hits, self.cache_calls = False, False, 0, []
         self.reads = 0
+        self.no_seek = False
         self.seed(0x1129, 2)
         endpoints = (lut_session.ALLOCATE, lut_session.RELEASE, lut_sdload.FS_OPEN,
                      lut_sdload.FS_READ, lut_sdload.FS_CLOSE, lut_sdload.FS_SEEK, 0x103382A2,

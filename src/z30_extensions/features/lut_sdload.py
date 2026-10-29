@@ -198,11 +198,12 @@ def sd_load_source():
     """sd_load(control, workspace) -> 0 success, 1 open, 2 I/O, 3 parse, 4 bounds.
 
     Exclusive ownership required. Failed loads preserve active pointer/length.
-    The length comes from seek(END), so the transfer stops at the real end of
-    file instead of at the first short read; the device answered zero bytes once
-    its first chunk was in. A file larger than the input buffer reports 4. Each
-    open gets one close attempt. r1 returns -1 when closed/no open, otherwise the
-    handle a caller must retain and close later.
+    The length comes from seek(END) through its out pointer; the call's return
+    register is not a status and is ignored, as the library's own reader does.
+    A zero length means seek is unavailable, so reads then stream in 1,024-byte
+    requests until one comes back empty. A file larger than the input buffer
+    reports 4. Each open gets one close attempt. r1 returns -1 when closed/no
+    open, otherwise the handle a caller must retain and close later.
     Read/close success must be 0; close failure always reports I/O, not capacity.
     """
     return (
@@ -222,24 +223,30 @@ def sd_load_source():
         'sd_checked: ldr r0, [r5, #16]; movs r1, #0; movs r2, #0;'
         + invoke(FS_OPEN) +
         'movs r11, #1; cmp r0, #0; blt sd_return; mov r10, r0;'
-        'movs r5, #0; movs r11, #2; mov.w r0, #4096; str r0, [sp, #16];'
-        # The file size comes from seek(END) and decides both the buffer request
-        # and the read length, so a short transfer cannot pass for end of file.
+        'movs r5, #0; movs r11, #2;'
+        # seek(END) reports the length through the out pointer; its return value
+        # is not a status, and the stock reader at 0x10595570 ignores it. A zero
+        # length means the call is unsupported, so fall back to streaming reads
+        # that stop at the first empty transfer.
         'mov r0, r10; movs r1, #0; movs r2, #2; add r3, sp, #8; movs r12, #0;'
         'str r12, [sp, #8];' + invoke(FS_SEEK) +
-        'cmp r0, #0; bne sd_close_error; ldr r0, [sp, #8]; cmp r0, #0; blt sd_close_error;'
+        'ldr r0, [sp, #8]; cmp r0, #0; beq sd_stream;'
+        'ldr r3, =8388608; cmp r0, r3; bhi sd_close_error;'
         'cmp r0, r7; bhi sd_buffer_full; str r0, [sp, #12];'
         'sd_read: ldr r1, [sp, #12]; subs r2, r1, r5; beq sd_read_done;'
-        # Position is re-established before every transfer: the device answered
-        # zero bytes once the first chunk was in, which truncated the input.
+        # One request covers exactly what is left, matching the library's own
+        # reader; the position is re-established first in case a transfer was
+        # short.
         'mov r0, r10; mov r1, r5; movs r2, #0; add r3, sp, #8;' + invoke(FS_SEEK) +
-        'cmp r0, #0; bne sd_close_error;'
-        'ldr r2, [sp, #12]; subs r2, r2, r5; ldr r3, [sp, #16]; cmp r2, r3; bls sd_chunk; mov r2, r3;'
-        'sd_chunk: str r2, [sp, #4]; add r1, r6, r5; mov r0, r10; mov r3, sp;'
+        'ldr r2, [sp, #12]; subs r2, r2, r5; b sd_request;'
+        'sd_stream: movs r2, #1024;'
+        'sd_request: str r2, [sp, #4]; add r1, r6, r5; mov r0, r10; mov r3, sp;'
         'movs r12, #0; str r12, [sp];' + invoke(FS_READ) +
         'cmp r0, #0; bne sd_close_error; ldr r0, [sp]; ldr r1, [sp, #4];'
-        'cmp r0, r1; bhi sd_close_error; cmp r0, #0; beq sd_close_error;'
-        'adds r5, r5, r0; b sd_read;'
+        'cmp r0, r1; bhi sd_close_error; cmp r0, #0; bne sd_progress;'
+        'ldr r1, [sp, #12]; cmp r1, #0; bne sd_close_error; b sd_read_done;'
+        'sd_progress: adds r5, r5, r0; ldr r1, [sp, #12]; cmp r1, #0; bne sd_read;'
+        'cmp r5, r7; blo sd_stream;'
         'sd_buffer_full: movs r11, #4; b sd_close_error;'
         'sd_read_done: mov r0, r10;' + invoke(FS_CLOSE) +
         'cmp r0, #0; bne sd_return; mov.w r10, #-1; movs r11, #3;'
