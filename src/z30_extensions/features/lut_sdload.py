@@ -197,9 +197,11 @@ def sd_load_source():
     """sd_load(control, workspace) -> 0 success, 1 open, 2 I/O, 3 parse, 4 bounds.
 
     Exclusive ownership required. Failed loads preserve active pointer/length.
-    Reads accept short chunks; zero-byte success is EOF, with one-byte overflow
-    probe at capacity. Each open gets one close attempt. r1 returns -1 when
-    closed/no open, otherwise the handle a caller must retain and close later.
+    Reads accept short chunks; zero-byte success is EOF. A buffer that fills
+    exactly reports 4 without probing, because a one-byte probe read returned
+    end-of-file on the device and truncated the input. Each open gets one close
+    attempt. r1 returns -1 when closed/no open, otherwise the handle a caller
+    must retain and close later.
     Read/close success must be 0; close failure always reports I/O, not capacity.
     """
     return (
@@ -220,17 +222,17 @@ def sd_load_source():
         + invoke(FS_OPEN) +
         'movs r11, #1; cmp r0, #0; blt sd_return; mov r10, r0;'
         'movs r5, #0; movs r11, #2;'
-        'sd_read: subs r2, r7, r5; cmp r2, #0; beq sd_probe;'
+        'sd_read: subs r2, r7, r5; cmp r2, #0; beq sd_buffer_full;'
         'cmp r2, #65536; bls sd_chunk; mov.w r2, #65536;'
         'sd_chunk: str r2, [sp, #4]; add r1, r6, r5; mov r0, r10; mov r3, sp;'
         'movs r12, #0; str r12, [sp];' + invoke(FS_READ) +
         'cmp r0, #0; bne sd_close_error; ldr r0, [sp]; ldr r1, [sp, #4];'
         'cmp r0, r1; bhi sd_close_error; cmp r0, #0; beq sd_read_done;'
         'adds r5, r5, r0; b sd_read;'
-        'sd_probe: mov r0, r10; add r1, sp, #8; movs r2, #1; mov r3, sp;'
-        'movs r12, #0; str r12, [sp];' + invoke(FS_READ) +
-        'cmp r0, #0; bne sd_close_error; ldr r0, [sp]; cmp r0, #0; beq sd_read_done;'
-        'movs r11, #4; b sd_close_error;'
+        # A full buffer means the file may be longer; ask for a bigger one. The
+        # one-byte probe this replaces reported end-of-file on the device, which
+        # truncated the read and surfaced as an invalid LUT instead of growing.
+        'sd_buffer_full: movs r11, #4; b sd_close_error;'
         'sd_read_done: mov r0, r10;' + invoke(FS_CLOSE) +
         'cmp r0, #0; bne sd_return; mov.w r10, #-1; movs r11, #3;'
         'cmp r5, #4; blo sd_parse_text; ldr r0, [r6];'

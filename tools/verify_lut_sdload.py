@@ -164,7 +164,9 @@ def run(data):
         assert f.load(text.encode(), error=error, chunk=13) == expected
         rows.append(dict(case=error, rejected=True, calls=list(f.events)))
     for name, kwargs, expected in [
-        ('exact_input_capacity', dict(read_cap=len(binary)), 0),
+        # A buffer that fills exactly cannot be told apart from a truncated read
+        # without probing, so it asks for a larger one and the session grows.
+        ('exact_input_capacity', dict(read_cap=len(binary)), 4),
         ('overflow_input', dict(read_cap=len(binary) - 1), 4),
         ('output_small', dict(out_cap=len(binary) - 1), 3),
         ('active_candidate', dict(active=ARENA + f.layout['sd_slot']), 4),
