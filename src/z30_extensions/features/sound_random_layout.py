@@ -14,9 +14,9 @@ RANDOM_META_PTR = 120
 ACTIVE_PCM = 124
 RANDOM_META_OFFSET = (NEW_SIZE + 3) & ~3
 RANDOM_META_SIZE = 64
+# LAST records selection, not a successful playback notification.
 COUNT, USED, RNG, LAST = 0, 4, 8, 12
 DESCRIPTORS = 16  # Four (PCM-relative offset, PCM byte length) pairs.
-CANDIDATE = 48  # Existing metadata padding; committed to LAST on native start success.
 RANDOM_SEED = 0x6D2B79F5
 
 MAX_FILES = 4

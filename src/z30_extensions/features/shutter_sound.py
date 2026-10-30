@@ -33,6 +33,13 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
         if extra_id is None:
             raise ValueError('No free random sound control identifier')
         file_identifiers += (extra_id,)
+        # A native 0x04190001 notification branches into the last instruction of
+        # the displaced shot window. Retarget it to the existing BLX r2 path:
+        # this branch has r6 == 4, so that path calls the same native callback
+        # and returns without invoking the shutter sound or the r6 == 0 work.
+        plan.edit(0x10072466, bytes.fromhex('3de0'),
+                  'Preserve native callback branch around displaced shot window',
+                  bytes.fromhex('9ae0'))
     if im.read(STATE_ANCHOR, 44) != bytes(44):
         raise ValueError('Sound state requires the unused stock page-zero slot')
     setup_header = list(im.words(SETUP_META_SOURCE, 7))
@@ -481,7 +488,8 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
             'cold_shot_behavior': 'No SD reads or PCM conversion on capture; bounded mailbox submission may request one eligible delayed sound after preload',
             'warm_shot_behavior': 'No SD reads, conversion or additional per-shot allocation; existing audio job allocations retained',
             'additional_state_bytes': RANDOM_SIZE - NEW_SIZE,
-            'selection': 'Private deterministic PRNG; avoid adjacent repeats with at least two valid clips',
+            'selection': 'Private deterministic PRNG; exclude last selected ordinal with at least two valid clips, regardless of later playback success',
+            'shot_trigger': 'Native photo phase 0 only; all phases retain their original callback',
             'busy_behavior': 'Upstream single pending request coalescing; not one complete clip per burst frame',
             'invalid_pool_behavior': 'Missing/invalid individual files skipped; fatal read/close/aggregate overflow fails closed',
             'camera_verified': False,
