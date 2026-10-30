@@ -9,8 +9,30 @@ from .sound_audio import audio_code
 from .sound_ui import ui_code
 
 
-def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_trace=False, aspect_border=False, aspect_border_diagnostic=False, aspect_border_lease=False, aspect_mask=False, aspect_mask_trial=False):
+def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_trace=False, aspect_border=False, aspect_border_diagnostic=False, aspect_border_lease=False, aspect_mask=False, aspect_mask_trial=False, random_sound=False):
     im = plan.image
+    if random_sound and (modules or bitrate or aspect or zebra):
+        raise ValueError('Random shutter sound currently supports the standalone sound menu only')
+    file_identifiers = FILE_IDS
+    file_count = 5
+    file_label_slot, file_mark_slot = 47, 60
+    allocation_size = NEW_SIZE
+    if random_sound:
+        from .sound_random_layout import RANDOM_SIZE
+        allocation_size = RANDOM_SIZE
+        file_count = 6
+        file_label_slot, file_mark_slot = 67, 73
+        occupied = set(ROOT_IDS + FILE_IDS + SWITCH_IDS + (ENTRY_ID, POPUP_ID))
+        for index in range(955):
+            page = im.words(0xC1832D24 + index * 44, 11)
+            if any(page):
+                meta = im.words(page[10], 7)
+                for row in range(meta[5] & 65535):
+                    occupied.add(struct.unpack('<H', im.read(meta[3] + row * 28 + 24, 2))[0])
+        extra_id = next((i for i in range(0x2400, 0x3000) if i not in occupied), None)
+        if extra_id is None:
+            raise ValueError('No free random sound control identifier')
+        file_identifiers += (extra_id,)
     if im.read(STATE_ANCHOR, 44) != bytes(44):
         raise ValueError('Sound state requires the unused stock page-zero slot')
     setup_header = list(im.words(SETUP_META_SOURCE, 7))
@@ -18,7 +40,7 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
         raise ValueError('Unexpected stock settings row count')
     # Copy a valid native callback table into the private state prefix. Page 0
     # remains absent from the flash layout; only its unused RAM pointer anchors
-    # this allocation after opening sound. No Camera Status page is registered.
+    # this allocation after initialization. No Camera Status page is registered.
     anchor_table = im.words(0xC1832D50 + 16, 1)[0]
     sizes = {'get': 128, 'cas': 96, 'validate': 384, 'convert': 192,
              'load': 1024, 'start': 448, 'stop': 192, 'trigger': 384,
@@ -29,6 +51,12 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
                  save_settings=640, restore_settings=640)
     sizes['settings_close'] = 128
     sizes['dismiss_error'] = 96
+    if random_sound:
+        from . import sound_auto, sound_auto_audio
+        sizes.update(random_init=128, random_read=768, random_select=384,
+                     load=2048, start=512, labels=1280)
+        sizes.update(sound_auto.SIZES)
+        sizes.update(sound_auto_audio.SIZES)
     if aspect:
         sizes.update(ensure=1024, getter=512, route=448, row=384)
     grouped = bool(modules or bitrate or aspect or zebra)
@@ -45,6 +73,8 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
                  one='1.WAV', two='2.WAV', three='3.WAV', four='4.WAV', empty='', current='*',
                  missing='File not found', read='Read failed', invalid='Invalid WAV', close='Close failed',
                  busy='Sound busy', queue='Play failed', audio='Audio failed', ok='OK', save='Settings not saved')
+    if random_sound:
+        texts['random'] = 'Random'
     if modules or bitrate or aspect or zebra:
         texts['entry'] = texts['title'] = 'Extensions'
     strings = {key: text_resources.alloc(text) for key, text in texts.items()}
@@ -52,11 +82,12 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
         strings['sound_title'] = text_resources.alloc('Shutter sound')
     paths = [plan.alloc(path.encode() + b'\0') for path in ['A:\\SHUTTER.WAV'] + [f'A:\\SHUTTER\\{i}.WAV' for i in range(1, 5)]]
     path_table = plan.alloc(struct.pack('<5I', *paths))
-    file_names = plan.alloc(struct.pack('<5I', *[strings[k] for k in ('root', 'one', 'two', 'three', 'four')]))
+    file_keys = ('root', 'one', 'two', 'three', 'four') + (('random',) if random_sound else ())
+    file_names = plan.alloc(struct.pack('<' + 'I' * file_count, *[strings[k] for k in file_keys]))
     fixed = plan.alloc(struct.pack('<15I', *[strings[k] for k in
         ('entry', 'title', 'enable', 'file', 'preview', 'reload', 'off', 'on', 'root', 'one', 'two', 'three', 'four', 'switch', 'files')]))
     errors = plan.alloc(struct.pack('<9I', *[strings[k] for k in ('empty', 'missing', 'read', 'invalid', 'close', 'busy', 'queue', 'audio', 'save')]))
-    file_ids = plan.alloc(struct.pack('<5I', *FILE_IDS))
+    file_ids = plan.alloc(struct.pack('<' + 'I' * file_count, *file_identifiers))
     switch_ids = plan.alloc(struct.pack('<2I', *SWITCH_IDS))
     # Settings is a child of the native tab container. Returning to the
     # settings object directly skips reconstruction of the shared sidebar.
@@ -138,13 +169,47 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
             extension['root_row'] = order.index('modules')
             group['labels']['modules'], group['values']['modules'] = mh.ROOT_SLOT, mh.STATUS_SLOT
             plan.features['module_host']['root_row'] = extension['root_row']
-    codes = audio_code(f, path_table, anchor_table)
+    codes = audio_code(f, path_table, anchor_table, random_sound=random_sound)
     from .sound_settings import settings_code
     config_path = plan.alloc(b'A:\\WL-SOUND.CFG\0')
-    codes.update(settings_code(f, config_path))
+    codes.update(settings_code(f, config_path, random_sound=random_sound))
     codes.update(ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids,
                          anchor_table, template, child_templates, extension, sidebar_parent=setup_parent,
-                         video=video, aspect=aspect_extension, zebra=zebra_extension, group=group))
+                         video=video, aspect=aspect_extension, zebra=zebra_extension, group=group,
+                         random_sound=random_sound))
+    auto_preload = None
+    if random_sound:
+        envelope = plan.alloc(struct.pack('<3I', 0, f['auto_worker'] | 1, 0))
+        codes.update(sound_auto_audio.auto_audio_code(f, envelope))
+        codes.update(sound_auto.auto_lifecycle_code(f))
+        auto_preload = sound_auto.install(plan, f)
+        audio_pointer = sound_auto_audio.AUDIO_DISPATCH_POINTER
+        original_audio = sound_auto_audio.STOCK_AUDIO_DISPATCH | 1
+        if im.words(audio_pointer, 1)[0] != original_audio:
+            raise ValueError('Unexpected native audio message callback binding')
+        plan.edit(audio_pointer, struct.pack('<I', f['auto_dispatch'] | 1),
+                  'Run sound preload on native audio worker')
+        auto_preload.update(
+            audio_callback_pointer=hex(audio_pointer),
+            original_audio_callback=hex(original_audio), immutable_envelope=hex(envelope),
+            private_event=hex(sound_auto_audio.AUTO_EVENT),
+            ready_flags=hex(sound_auto_audio.READY_FLAGS),
+            single_flight_word=hex(sound_auto_audio.QUEUED),
+            pending_cold_shot_word=hex(sound_auto_audio.WANT_PLAY),
+            attempt_word=hex(sound_auto_audio.ATTEMPTS),
+            cancellation_epoch=hex(sound_auto_audio.USER_EPOCH),
+            maximum_queue_attempts=sound_auto_audio.MAX_ATTEMPTS,
+            native_audio_queue_pointer=hex(sound_auto_audio.AUDIO_QUEUE_PTR),
+            native_audio_queue_object=hex(sound_auto_audio.AUDIO_QUEUE_OBJECT),
+            native_power_state_base=hex(sound_auto_audio.POWER_BASE),
+            native_card_format_flags=hex(sound_auto_audio.CARD_FLAGS),
+            checked_mailbox_enqueue='0x1021157c; zero success, failure frees the 28-byte message',
+            native_sd_call_timeout_known=False,
+            new_threads=False, startup_autoplay=False,
+            trigger_sd_reads=False, trigger_pcm_conversion=False,
+            public_state_hidden_during_initialization=True,
+            verification_boundary='Static stock lifecycle analysis and modeled native-service ARM checks; no physical startup/SD/audio verification',
+        )
     c = constant
     call = lambda name: invoke(f[name])
     owned_pages = [PAGE_INDEX, FILES_INDEX, SWITCH_INDEX, POPUP_INDEX]
@@ -236,12 +301,12 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
         meta = im.words(page[10], 7)
         for row in range(meta[5] & 65535):
             used.add(struct.unpack('<H', im.read(meta[3] + row * 28 + 24, 2))[0])
-    if set(ROOT_IDS + FILE_IDS + SWITCH_IDS + (ENTRY_ID, POPUP_ID)) & used:
+    if set(ROOT_IDS + file_identifiers + SWITCH_IDS + (ENTRY_ID, POPUP_ID)) & used:
         raise ValueError('Custom control identifiers conflict with stock')
     pages = {}
     page_specs = [
         (PAGE_INDEX, 4, 41, 54, 40, ROOT_IDS),
-        (FILES_INDEX, 5, 47, 60, 53, FILE_IDS),
+        (FILES_INDEX, file_count, file_label_slot, file_mark_slot, 53, file_identifiers),
         (SWITCH_INDEX, 2, 45, 58, 52, SWITCH_IDS),
         (POPUP_INDEX, 1, 66, 56, 40, (POPUP_ID,)),
     ]
@@ -373,7 +438,7 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
     plan.features['shutter_sound'] = {
         'functions': {k: hex(v | 1) for k, v in f.items()}, 'code_sizes': code_sizes,
         'pages': pages, 'state_anchor': hex(STATE_ANCHOR + 16), 'anchor_table': hex(anchor_table),
-        'page_template': hex(template), 'persistent_state_size': (group['allocation_size'] if grouped else NEW_SIZE) + 31,
+        'page_template': hex(template), 'persistent_state_size': (group['allocation_size'] if grouped else allocation_size) + 31,
         'root_parent': hex(setup_parent),
         'page_offsets': {str(PAGE_INDEX): PAGE_OFFSET, str(FILES_INDEX): FILES_OFFSET, str(SWITCH_INDEX): SWITCH_OFFSET, str(POPUP_INDEX): POPUP_OFFSET, **({str(mh.PAGE_INDEX): mh.PAGE_OFFSET} if modules else {}), **({str(bu.PAGE_INDEX):video['page_offset']} if video else {}), **({str(au.PAGE_INDEX):aspect_extension['page_offset']} if aspect else {}), **({str(zu.PAGE_INDEX):zebra_extension['page_offset']} if zebra else {}), **({str(SOUND_GROUP_INDEX):group['page_offset']} if grouped else {})},
         'menu_categories': ([dict(key=key,row=row,control_id=category_ids[key],
@@ -384,7 +449,7 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
         'setup_entry_id': hex(ENTRY_ID), 'settings_count': 39,
         'setup_entry_controls': {'ascii': hex(controls_address), 'utf16': hex(unicode_controls)},
         'setup_entry_prefetch_refresh': True,
-        'default_enabled': False, 'settings_persistence': 'SD WL-SOUND.CFG; restore on first menu entry or photo trigger',
+        'default_enabled': False, 'settings_persistence': ('SD WL-SOUND.CFG; automatic deferred restoration after card mount and application startup readiness' if random_sound else 'SD WL-SOUND.CFG; restore on first menu entry or photo trigger'),
         'error_ui': 'Native dialog body and OK control; stable menu titles',
         'ui_languages': {'26': 'zh-Hans', '27': 'zh-Hant', 'other': 'en'},
         'ui_text_api': {'ascii': '0x10454efe', 'utf16': '0x10454f5a', 'language_key': '0x1400',
@@ -395,3 +460,30 @@ def add(plan, modules=False, bitrate=False, aspect=False, zebra=False, aspect_tr
         'selection_mark': '*', 'native_back_icon_preserved': True, 'no_status_ui': True,
         'physical_menu_audio_verified': False,
     }
+    if random_sound:
+        from .sound_random_layout import (RANDOM_INDEX, RANDOM_META_PTR, ACTIVE_PCM, RANDOM_META_OFFSET,
+                                          MAX_FILES, MAX_TOTAL_DATA, TOTAL_PCM_CAPACITY,
+                                          PCM_CAPACITY, PCM_SLOT_OFFSETS, RANDOM_SIZE)
+        plan.features['shutter_sound']['random_playback'] = {
+            'enabled_in_build': True, 'selection_index': RANDOM_INDEX,
+            'menu_label': 'Random', 'pool_paths': [f'SHUTTER/{i}.WAV' for i in range(1, 5)],
+            'maximum_files': MAX_FILES, 'maximum_file_seconds': 1.08,
+            'maximum_file_wav_data_bytes': MAX_DATA, 'maximum_total_seconds': 4.32,
+            'maximum_total_wav_data_bytes': MAX_TOTAL_DATA, 'pcm_pool_bytes': TOTAL_PCM_CAPACITY,
+            'pcm_slot_capacity_bytes': PCM_CAPACITY,
+            'pcm_slot_offsets_from_pcm_base': list(PCM_SLOT_OFFSETS),
+            'pcm_layout': 'Original fixed-mode slot plus three appended slots; menu/metadata gap is never PCM storage',
+            'metadata_offset': RANDOM_META_OFFSET, 'metadata_pointer_offset': RANDOM_META_PTR,
+            'active_pcm_pointer_offset': ACTIVE_PCM,
+            'settings_format': 'WLS2; legacy WLS1 fixed selections 0-4 accepted',
+            'file_label_slot': file_label_slot, 'file_mark_slot': file_mark_slot,
+            'preload': 'Automatic deferred preload after card mount and application startup readiness; manual menu selection/reload remains available',
+            'cold_shot_behavior': 'No SD reads or PCM conversion on capture; bounded mailbox submission may request one eligible delayed sound after preload',
+            'warm_shot_behavior': 'No SD reads, conversion or additional per-shot allocation; existing audio job allocations retained',
+            'additional_state_bytes': RANDOM_SIZE - NEW_SIZE,
+            'selection': 'Private deterministic PRNG; avoid adjacent repeats with at least two valid clips',
+            'busy_behavior': 'Upstream single pending request coalescing; not one complete clip per burst frame',
+            'invalid_pool_behavior': 'Missing/invalid individual files skipped; fatal read/close/aggregate overflow fails closed',
+            'camera_verified': False,
+        }
+        plan.features['shutter_sound']['automatic_preload'] = auto_preload

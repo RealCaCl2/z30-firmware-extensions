@@ -6,11 +6,12 @@ from .platform.z30_120 import BASE
 
 
 PRESETS = ('full', 'liveview-dual', 'shutter-sound', 'm900', 'mtp-fast', 'module-host', 'video-rot',
-           'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz')
+           'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz', 'shutter-random')
 LEGACY_PRESETS = ('modular',)
-FEATURE_ORDER = ('liveview-dual', 'm900', 'shutter-sound', 'mtp-fast', 'module-host', 'video-rot',
+FEATURE_ORDER = ('liveview-dual', 'm900', 'shutter-sound', 'shutter-random', 'mtp-fast', 'module-host', 'video-rot',
                  'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz')
-FULL_FEATURES = FEATURE_ORDER
+FULL_FEATURES = tuple(feature for feature in FEATURE_ORDER
+                      if feature != 'shutter-random')
 MODULAR_FEATURES = ('liveview-dual', 'm900', 'shutter-sound', 'module-host')
 
 
@@ -30,8 +31,10 @@ def resolve_presets(preset='full'):
         else:
             features.add(name)
     # Module host and bitrate profiles share the sound menu/state framework.
-    if any(f in features for f in ('module-host', 'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra')):
+    if any(f in features for f in ('module-host', 'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'shutter-random')):
         features.add('shutter-sound')
+    if 'shutter-random' in features and features - {'shutter-sound', 'shutter-random', 'wifi-5ghz'}:
+        raise ValueError('shutter-random currently supports shutter-sound and the Wi-Fi presets only; do not combine with full or other extensions')
     return list(dict.fromkeys(selected)), [f for f in FEATURE_ORDER if f in features]
 
 
@@ -78,7 +81,8 @@ def build(source, preset='full', *, aspect_trace=False, aspect_border=False,
         add(plan, modules='module-host' in features, bitrate='bitrate-slowmo-uncap' in features,
             zebra='photo-zebra' in features, aspect='aspect-profiles' in features, aspect_trace=aspect_trace, aspect_border=aspect_border,
             aspect_border_diagnostic=aspect_border_diagnostic,aspect_border_lease=aspect_border_lease,
-            aspect_mask=aspect_mask, aspect_mask_trial=aspect_mask_trial)
+            aspect_mask=aspect_mask, aspect_mask_trial=aspect_mask_trial,
+            random_sound='shutter-random' in features)
     if 'mtp-fast' in features:
         from .features.mtp_fast import add
         add(plan)

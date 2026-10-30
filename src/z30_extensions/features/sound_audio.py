@@ -5,7 +5,7 @@
 from .sound_layout import *
 from ..assembly import constant, invoke
 
-def audio_code(addresses, path_table, anchor_table):
+def audio_code(addresses, path_table, anchor_table, *, random_sound=False):
     codes = {}
     c = constant
     def call(name): return invoke(addresses[name])
@@ -184,4 +184,7 @@ def audio_code(addresses, path_table, anchor_table):
             pop {{r0-r3,r12,lr}}; {c('lr',0x100725a1)}
             .balign 4; ldr.w pc,[pc,#0]; .word 0x100725a1;
         """
+    if random_sound:
+        from .sound_random import extend_audio_code
+        extend_audio_code(codes, addresses, path_table)
     return codes

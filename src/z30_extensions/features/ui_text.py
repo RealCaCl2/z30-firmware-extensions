@@ -28,6 +28,7 @@ TRANSLATIONS = {
     'Sound file': ('声音文件', '聲音檔案'),
     'Preview sound': ('播放声音', '播放聲音'),
     'Reload sound': ('重新加载', '重新載入'),
+    'Random': ('随机播放', '隨機播放'),
     'OFF': ('关闭', '關閉'), 'ON': ('开启', '開啟'),
     'None': ('未选择', '未選擇'),
     'File not found': ('找不到文件', '找不到檔案'),

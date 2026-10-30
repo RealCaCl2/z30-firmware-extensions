@@ -18,6 +18,7 @@ PRESET_LABELS = {
     'aspect-profiles': '自定义照片画幅与半透明遮幅，保留原厂内部网格',
     'photo-zebra': '照片取景斑马纹；独立开关，复用原厂样式和阈值',
     'wifi-5ghz': 'Wi-Fi 5 GHz 地区解锁；配置 7 请求 US/-1，包含在 full 中',
+    'shutter-random': '定制随机快门声音；预加载 1.WAV–4.WAV，每段≤1.08秒、总长≤4.32秒，仅支持与 Wi-Fi 预设组合',
 }
 
 

@@ -5,9 +5,14 @@
 from .sound_layout import *
 from ..assembly import constant, invoke
 
-def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_table, template, child_templates, extension=None, sidebar_parent=None, video=None, aspect=None, zebra=None, group=None):
+def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_table, template, child_templates, extension=None, sidebar_parent=None, video=None, aspect=None, zebra=None, group=None, random_sound=False):
     code = {}
     allocation_size = NEW_SIZE
+    file_count = 6 if random_sound else 5
+    file_mark_slot = 73 if random_sound else 60
+    if random_sound:
+        from .sound_random_layout import RANDOM_SIZE
+        allocation_size = RANDOM_SIZE
     module_copy = module_labels = getter_check = getter_result = route_extra = route_action = action_extra = ''
     if extension:
         from . import module_host as mh
@@ -76,6 +81,18 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
     c = constant
     def call(name): return invoke(f[name])
     native = lambda address: invoke(address, thumb=address != 0x10199bdc)
+    random_initialize = (f"mov r0,r4;{call('random_init')}" if random_sound else '')
+    # Optional r1 result tells the deferred worker whether THIS invocation
+    # created/restored the allocation. It must not retire a menu-created state
+    # merely because a queued request was cancelled in the meantime.
+    ensure_enter = 'sub sp,#8;movs r0,#0;str r0,[sp];' if random_sound else ''
+    ensure_restored = 'movs r1,#1;str r1,[sp];' if random_sound else ''
+    ensure_finish = 'ldr r1,[sp];add sp,#8;' if random_sound else ''
+    random_file_labels = (f"""movs r5,#0;
+        random_label_loop:{c('r0',file_names)}ldr r0,[r0,r5,lsl #2];
+        add r1,r5,#67;movs r2,#0;{call('text')}
+        adds r5,#1;cmp r5,#6;bne random_label_loop;""" if random_sound else '')
+    selected_guard = (f'cmp r1,#{file_count - 1};bhi done;' if random_sound else '')
     sound_page = SOUND_GROUP_INDEX if group else PAGE_INDEX
     sound_offset = group['page_offset'] if group else PAGE_OFFSET
     sound_parent = f"{c('r0',sound_offset)}add r0,r4,r0;"
@@ -100,7 +117,7 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
         sidebar_refresh = f"""{c('r0',sidebar_parent)}ldr r0,[r0,#12];cmp r0,#0;beq done;
             mov r8,r0;movs r1,#1;{native(0x104546b0)}mov r0,r8;{native(0x10454226)}"""
     code['ensure']=f"""
-            push {{r4-r6,lr}}; {call('get')} cmp r0,#0; bne done;
+            push {{r4-r6,lr}}; {ensure_enter}{call('get')} cmp r0,#0; bne done;
             {c('r0',STATE_ANCHOR+20)}movs r1,#0;movs r2,#1;{call('cas')}cmp r0,#1;bne done;
             {call('get')}cmp r0,#0;bne unlock;
             {c('r0',allocation_size+31)} movs r1,#0; {native(0x10211f4c)} cmp r0,#0; beq unlock;
@@ -116,9 +133,10 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
             {c('r1',child_templates[POPUP_INDEX])} movs r2,#44; {native(0x10199bdc)}
             add r0,r4,#{PAGE_OFFSET};str r0,[r5,#4];
             {module_copy} {video_copy} {group_copy} {c('r0',MAGIC)} str r0,[r4,#56];str r6,[r4,#60];mvn r0,#0;str r0,[r4,#112];str r0,[r4,#{SETTINGS_FD}];
-            dmb ish;{c('r0',STATE_ANCHOR)} str r4,[r0,#16];{call('restore_settings')}{video_restore}mov r0,r4;
+            {random_initialize}
+            dmb ish;{c('r0',STATE_ANCHOR)} str r4,[r0,#16];{call('restore_settings')}{video_restore}{ensure_restored}mov r0,r4;
             unlock:{c('r1',STATE_ANCHOR+20)}movs r2,#0;dmb ish;str r2,[r1];
-            done: pop {{r4-r6,pc}};
+            done: {ensure_finish}pop {{r4-r6,pc}};
         """
 
     code['labels']=f"""
@@ -126,12 +144,13 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
             movs r1,#39;movs r2,#0;{call('text_entry')} movs r5,#40;movs r6,#14;
             fixed_loop: ldr r0,[r4],#4;mov r1,r5;movs r2,#0;{call('text')}
             adds r5,#1;subs r6,#1;bne fixed_loop;
+            {random_file_labels}
             {call('get')} mov r4,r0;{c('r0',strings['off'])} cmp r4,#0;beq enabled;
             ldr r1,[r4,#{ENABLED}];cmp r1,#1;bne enabled;{c('r0',strings['on'])}
             enabled: movs r1,#54;movs r2,#0;{call('text')}
             {c('r0',strings['none'])} cmp r4,#0;beq selected;
             ldr r1,[r4,#{LENGTH}];cmp r1,#0;beq selected;
-            ldr r1,[r4,#{SELECTED}];cmp r1,#4;bhi selected;
+            ldr r1,[r4,#{SELECTED}];cmp r1,#{file_count - 1};bhi selected;
             {c('r0',file_names)} ldr r0,[r0,r1,lsl #2];
             selected: movs r1,#55;movs r2,#0;{call('text')}
             {c('r0',strings['empty'])} movs r1,#56;movs r2,#0;{call('text')}
@@ -145,8 +164,8 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
             files_loop: {c('r0',strings['empty'])} cmp r4,#0;beq file_put;
             ldr r1,[r4,#{LENGTH}];cmp r1,#0;beq file_put;
             ldr r1,[r4,#{SELECTED}];cmp r1,r5;bne file_put;{c('r0',strings['current'])}
-            file_put: add r1,r5,#60;movs r2,#0;{call('text')}
-            adds r5,#1;cmp r5,#5;bne files_loop;
+            file_put: add r1,r5,#{file_mark_slot};movs r2,#0;{call('text')}
+            adds r5,#1;cmp r5,#{file_count};bne files_loop;
             {c('r0',strings['empty'])}cmp r4,#0;beq popup_text;
             ldr r1,[r4,#{RESULT}];cmp r1,#8;bhi popup_text;
             {c('r0',errors)}ldr r0,[r0,r1,lsl #2];
@@ -193,8 +212,8 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
             open_switch:movs r0,#0;str r0,[r4,#{RESULT}];movs r0,#2;{c('r1',SWITCH_INDEX)}{native(0x1045f732)}
             {c('r0',SWITCH_OFFSET)}add r0,r4,r0;ldr r1,[r4,#{ENABLED}];{c('r2',switch_ids)}ldr r1,[r2,r1,lsl #2];{native(0x1045d54c)}b done;
             open_files:movs r0,#0;str r0,[r4,#{RESULT}];movs r0,#2;{c('r1',FILES_INDEX)}{native(0x1045f732)}
-            {c('r0',FILES_OFFSET)}add r0,r4,r0;ldr r1,[r4,#{SELECTED}];{c('r2',file_ids)}ldr r1,[r2,r1,lsl #2];{native(0x1045d54c)}b done;
-            file_apply:cmp r5,#4;bhi redraw;mov r0,r5;{call('load')}cmp r0,#1;bne redraw;
+            {c('r0',FILES_OFFSET)}add r0,r4,r0;ldr r1,[r4,#{SELECTED}];{selected_guard}{c('r2',file_ids)}ldr r1,[r2,r1,lsl #2];{native(0x1045d54c)}b done;
+            file_apply:cmp r5,#{file_count - 1};bhi redraw;mov r0,r5;{call('load')}cmp r0,#1;bne redraw;
             {call('save_settings')}b return_root;
             switch_apply:cmp r5,#1;bhi redraw;cmp r5,#0;beq disable;
             ldr r0,[r4,#{LENGTH}];cmp r0,#0;bne enabled;
@@ -265,4 +284,15 @@ def ui_code(f, strings, fixed, file_names, errors, file_ids, switch_ids, anchor_
         movs r1,#0;str r1,[r0,#{RESULT}];
         done:movs r0,#0;pop {{r4,pc}};
     """
+    if random_sound:
+        # The worker publishes the allocation before restoring its settings so
+        # private load/get can use it. Public menu paths must not observe that
+        # partially initialized state. Keep the second, lock-owned get private.
+        code['ensure'] = code['ensure'].replace(call('get'), call('auto_get'), 1)
+        for name in ('labels', 'action', 'getter', 'route', 'show_error', 'dismiss_error'):
+            code[name] = code[name].replace(call('get'), call('auto_get'))
+        # A deliberate user action invalidates any delayed cold-shot request.
+        # This also runs when initialization is busy and the menu cannot act.
+        code['action'] = code['action'].replace(call('auto_get'),
+                                               call('auto_cancel') + call('auto_get'), 1)
     return code

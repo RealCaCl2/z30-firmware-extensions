@@ -14,7 +14,11 @@
 - `src/z30_extensions/features/bitrate_ui.py`
 - `src/z30_extensions/features/shutter_sound.py`
 - `src/z30_extensions/features/sound_audio.py`
+- `src/z30_extensions/features/sound_auto.py`
+- `src/z30_extensions/features/sound_auto_audio.py`
 - `src/z30_extensions/features/sound_layout.py`
+- `src/z30_extensions/features/sound_random.py`
+- `src/z30_extensions/features/sound_random_layout.py`
 - `src/z30_extensions/features/sound_settings.py`
 - `src/z30_extensions/features/sound_ui.py`
 - `src/z30_extensions/features/ui_text.py`

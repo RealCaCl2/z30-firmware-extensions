@@ -15,12 +15,22 @@ from ..assembly import constant, invoke
 def settings_code(f, path, *, state_get='get', close='settings_close',
                   magic=CONFIG_MAGIC, enabled_offset=ENABLED, selected_offset=SELECTED,
                   fd_offset=SETTINGS_FD, enabled_max=1, selected_max=4,
-                  load_sound=True, restore_enabled=False):
+                  load_sound=True, restore_enabled=False, random_sound=False):
     """Emit a checked SD record; optional layout supports independent video state."""
     CONFIG_MAGIC, ENABLED, SELECTED, SETTINGS_FD = magic, enabled_offset, selected_offset, fd_offset
+    if random_sound:
+        if state_get != 'get' or not load_sound:
+            raise ValueError('Random settings only apply to the sound state')
+        CONFIG_MAGIC = 0x32534C57  # WLS2, adds selection 5 for the preloaded random pool.
+        selected_max = 5
     c = constant
     call = lambda name: invoke(f[state_get if name == 'get' else close if name == 'settings_close' else name])
     n = invoke
+    magic_check = f"ldr r0,[sp,#48];{c('r1',CONFIG_MAGIC)}cmp r0,r1;bne done;"
+    if random_sound:
+        magic_check = f"""ldr r0,[sp,#48];{c('r1',CONFIG_MAGIC)}cmp r0,r1;beq version_ok;
+            {c('r1',0x31534C57)}cmp r0,r1;bne done;
+            ldr r1,[sp,#56];cmp r1,#4;bhi done;version_ok:"""
     report_success = (f'movs r0,#0;str r0,[r4,#{RESULT}];' if state_get == 'get' else
                       f"{invoke(f['get'])}movs r1,#0;str r1,[r0,#{RESULT}];")
     report_failure = (f'movs r0,#8;str r0,[r4,#{RESULT}];' if state_get == 'get' else
@@ -73,7 +83,7 @@ def settings_code(f, path, *, state_get='get', close='settings_close',
             mov r0,sp;{n(0x1033832e)}{c('r1',SUCCESS)}cmp r0,r1;bne cleanup;
             mvn r0,#0;str r0,[r4,#{SETTINGS_FD}];
             cmp r5,r1;bne done;ldr r0,[sp,#40];cmp r0,#16;bne done;
-            ldr r0,[sp,#48];{c('r1',CONFIG_MAGIC)}cmp r0,r1;bne done;
+            {magic_check}
             ldr r5,[sp,#52];cmp r5,#{enabled_max};bhi done;ldr r6,[sp,#56];cmp r6,#{selected_max};bhi done;
             eor r0,r0,r5;eor r0,r0,r6;mvn r0,r0;ldr r1,[sp,#60];cmp r0,r1;bne done;
             {restore}
