@@ -6,12 +6,14 @@ from .platform.z30_120 import BASE
 
 
 PRESETS = ('full', 'liveview-dual', 'shutter-sound', 'm900', 'mtp-fast', 'module-host', 'video-rot',
-           'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz', 'shutter-random')
+           'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz', 'shutter-random',
+           'wifi-5ghz-all-profiles')
 LEGACY_PRESETS = ('modular',)
 FEATURE_ORDER = ('liveview-dual', 'm900', 'shutter-sound', 'shutter-random', 'mtp-fast', 'module-host', 'video-rot',
-                 'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz')
+                 'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'wifi-5ghz',
+                 'wifi-5ghz-all-profiles')
 FULL_FEATURES = tuple(feature for feature in FEATURE_ORDER
-                      if feature != 'shutter-random')
+                      if feature not in ('shutter-random', 'wifi-5ghz-all-profiles'))
 MODULAR_FEATURES = ('liveview-dual', 'm900', 'shutter-sound', 'module-host')
 
 
@@ -30,10 +32,14 @@ def resolve_presets(preset='full'):
             features.update(MODULAR_FEATURES)
         else:
             features.add(name)
+    # The explicit broader table override includes profile 7 already. Never
+    # apply both edits to that record, including when combined with full.
+    if 'wifi-5ghz-all-profiles' in features:
+        features.discard('wifi-5ghz')
     # Module host and bitrate profiles share the sound menu/state framework.
     if any(f in features for f in ('module-host', 'bitrate-slowmo-uncap', 'aspect-profiles', 'photo-zebra', 'shutter-random')):
         features.add('shutter-sound')
-    if 'shutter-random' in features and features - {'shutter-sound', 'shutter-random', 'wifi-5ghz'}:
+    if 'shutter-random' in features and features - {'shutter-sound', 'shutter-random', 'wifi-5ghz', 'wifi-5ghz-all-profiles'}:
         raise ValueError('shutter-random currently supports shutter-sound and the Wi-Fi presets only; do not combine with full or other extensions')
     return list(dict.fromkeys(selected)), [f for f in FEATURE_ORDER if f in features]
 
@@ -95,7 +101,10 @@ def build(source, preset='full', *, aspect_trace=False, aspect_border=False,
     if 'photo-zebra' in features:
         from .features.photo_zebra import add
         add(plan)
-    if 'wifi-5ghz' in features:
+    if 'wifi-5ghz-all-profiles' in features:
+        from .features.wifi_all_profiles import add
+        add(plan)
+    elif 'wifi-5ghz' in features:
         from .features.wifi_5ghz import add
         add(plan)
     output, report = plan.finish()
