@@ -25,7 +25,7 @@ def extend_audio_code(codes, addresses, path_table):
     codes['random_init'] = f"""
         {c('r1',RANDOM_META_OFFSET)} add r1,r0,r1; str r1,[r0,#{RANDOM_META_PTR}];
         {c('r2',RANDOM_SEED)} str r2,[r1,#{RNG}];
-        mvn r2,#0; str r2,[r1,#{LAST}];
+        mvn r2,#0; str r2,[r1,#{LAST}]; str r2,[r1,#{CANDIDATE}];
         {c('r2',PCM_OFFSET)} add r2,r0,r2; str r2,[r0,#{ACTIVE_PCM}]; bx lr;
     """
 
@@ -74,11 +74,11 @@ def extend_audio_code(codes, addresses, path_table):
         {call('convert')} str r0,[r4,#{LENGTH}];
         {c('r1',PCM_OFFSET)} add r1,r4,r1; str r1,[r4,#{ACTIVE_PCM}];
         movs r0,#0; str r0,[r5,#{COUNT}]; str r0,[r5,#{USED}];
-        mvn r0,#0; str r0,[r5,#{LAST}]; b publish;
+        mvn r0,#0; str r0,[r5,#{LAST}]; str r0,[r5,#{CANDIDATE}]; b publish;
 
         bank: movs r0,#0; str r0,[r4,#{LENGTH}]; str r0,[r4,#{PENDING}];
         str r0,[r5,#{COUNT}]; str r0,[r5,#{USED}];
-        mvn r0,#0; str r0,[r5,#{LAST}];
+        mvn r0,#0; str r0,[r5,#{LAST}]; str r0,[r5,#{CANDIDATE}];
         movs r6,#1; movs r8,#0; movs r9,#0;
         next_file: mov r0,r4; mov r1,r6; {call('random_read')} cmp r0,#0; bne add_clip;
         ldr r0,[r4,#{RESULT}]; cmp r0,#1; beq next_slot; cmp r0,#3; beq next_slot;
@@ -115,7 +115,10 @@ def extend_audio_code(codes, addresses, path_table):
 
     # At most one owner can enter this function: start is invoked after the
     # idle->queued CAS, or by the completion callback after prior playback.
-    # LAST is a bank ordinal, not the user's persisted SELECTED preference.
+    # LAST is the bank ordinal whose native playback successfully started.
+    # A candidate is only provisional: allocation/queue/start failures must not
+    # make the last successful clip eligible again. Map one draw over N-1
+    # choices around LAST; there is no retry loop or extra random draw.
     codes['random_select'] = f"""
         push {{r4-r8,lr}}; mov r4,r0;
         ldr r0,[r4,#{BUSY}]; cmp r0,#2; bne bad;
@@ -130,11 +133,12 @@ def extend_audio_code(codes, addresses, path_table):
         choose: udiv r0,r7,r1; mls r0,r0,r1,r7;
         cmp r8,r6; bhs chosen; cmp r0,r8; blo chosen; adds r0,#1; b chosen;
         single: movs r0,#0;
-        chosen: str r0,[r5,#{LAST}]; add r1,r5,#{DESCRIPTORS}; add r1,r1,r0,lsl #3;
+        chosen: add r1,r5,#{DESCRIPTORS}; add r1,r1,r0,lsl #3;
         ldr r2,[r1]; ldr r3,[r1,#4]; cmp r3,#0; beq bad;
         {c('r1',PCM_CAPACITY)} cmp r3,r1; bhi bad; mul r1,r0,r1;
         cmp r0,#0; beq expected_slot; {c('r8',RANDOM_SLOT_GAP)} add r1,r1,r8;
         expected_slot: cmp r2,r1; bne bad;
+        str r0,[r5,#{CANDIDATE}];
         {c('r1',PCM_OFFSET)} add r1,r1,r4; add r1,r1,r2;
         str r1,[r4,#{ACTIVE_PCM}]; str r3,[r4,#{LENGTH}]; dmb ish;
         good: movs r0,#1; pop {{r4-r8,pc}};
@@ -195,4 +199,10 @@ def extend_audio_code(codes, addresses, path_table):
     assert started in codes['complete']
     codes['complete'] = codes['complete'].replace(started,
         f'started: ldr r0,[r4,#{BUSY}]; cmp r0,#2; bne done; '
-        'ldr r0,[r6,#4]; cmp r0,#0; bne failed;', 1)
+        'ldr r0,[r6,#4]; cmp r0,#0; bne failed;' + f"""
+        ldr r0,[r4,#{SELECTED}]; cmp r0,#{RANDOM_INDEX}; bne history_done;
+        ldr r0,[r4,#{RANDOM_META_PTR}]; cmp r0,#0; beq history_done;
+        ldr r1,[r0,#{COUNT}]; cmp r1,#1; blo history_done; cmp r1,#4; bhi history_done;
+        ldr r2,[r0,#{CANDIDATE}]; cmp r2,r1; bhs history_done; str r2,[r0,#{LAST}];
+        history_done:
+        """, 1)
