@@ -17,7 +17,7 @@ PRESET_LABELS = {
     'bitrate-slowmo-uncap': '机内码率档位与记忆；放宽慢动作时长和文件限制',
     'aspect-profiles': '自定义照片画幅与半透明遮幅，保留原厂内部网格',
     'photo-zebra': '照片取景斑马纹；独立开关，复用原厂样式和阈值',
-    'wifi-5ghz': 'Wi-Fi 5 GHz 地区解锁；配置 7 请求 US/-1，包含在 full 中',
+    'wifi-5ghz': 'Wi-Fi 5 GHz 地区解锁；全部有效配置请求 US/-1，包含在 full 中',
 }
 
 
@@ -44,7 +44,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('feature', nargs='*', metavar='PRESET',
                         help='Combine presets with spaces: ' + ', '.join(PRESETS) +
-                             '; full enables ten features including wifi-5ghz (profile 7 US/-1); aspect-profiles includes a translucent live-view mask; experimental module-host includes shutter-sound; '
+                             '; full enables ten features including wifi-5ghz (all valid profiles US/-1); aspect-profiles includes a translucent live-view mask; experimental module-host includes shutter-sound; '
                              'photo-zebra includes an independent photo live-view switch; legacy alias: modular')
     parser.add_argument('--interactive', action='store_true', help='Prompt for presets even when stdin is redirected')
     parser.add_argument('--source', type=Path, required=True, help='Original Z_30_0120.bin, SHA-256 checked before decoding')
