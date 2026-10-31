@@ -35,7 +35,22 @@ Wonder Lantern Z30 是 WonderLantern 组织面向 **Nikon Z30 C 1.20** 的实验
 
 ## 快速开始
 
-首次使用请阅读[离线构建指引](PATCH_GUIDE.md)。以下命令在项目根目录的 PowerShell 中运行。
+### 图形界面（推荐，Windows）
+
+不需要安装 Python，也不需要输入命令：
+
+1. 从 [Releases](https://github.com/WonderLantern/wonder-lantern-z30/releases/latest) 下载 `WonderLanternZ30-windows-x64.zip`，**完整解压**，不要在压缩包里直接运行。
+2. 自行准备未经修改的 `Z_30_0120.bin`（要求见下表），放到解压后的文件夹里，或在程序里手动选择。
+3. 打开 `WonderLanternZ30.exe`，等待显示固件校验通过。界面语言可在中文和英文之间切换。
+4. 勾选功能（默认 `full`），点击“开始构建”。产物写入程序旁边的 `output` 文件夹，不会覆盖已有文件。
+
+程序没有代码签名，Windows SmartScreen 可能提示风险；可先核对 Release 页面列出的 SHA-256。程序与下方命令行使用同一套校验和补丁流程，不连接相机，也不写 SD 卡。
+
+其他系统或需要修改源码时，可运行 `python patch_gui.py`，或使用下面的命令行。
+
+### 命令行
+
+详细说明见[离线构建指引](PATCH_GUIDE.md)。以下命令在项目根目录的 PowerShell 中运行。
 
 ### 1. 准备源码与原厂固件
 
@@ -209,7 +224,7 @@ python -m unittest discover -s tests -v
 
 | 文档 | 内容 |
 | --- | --- |
-| [离线构建指引](PATCH_GUIDE.md) | 准备文件、菜单选择、产物与常见错误。 |
+| [离线构建指引](PATCH_GUIDE.md) | 图形界面与命令行步骤、产物与常见错误。 |
 | [构建说明](docs/build.md) | 输入身份、解码、预设组合与补丁流程。 |
 | [照片取景斑马纹](docs/photo-zebra.md) | 独立开关、原厂图案与阈值、偏好保存及验证范围。 |
 | [画幅与半透明遮幅](docs/aspect-profiles.md) | 六种比例、输出尺寸、取景遮幅与验证边界。 |

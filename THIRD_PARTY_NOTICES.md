@@ -34,3 +34,5 @@
 ## 依赖
 
 Keystone 和 Unicorn 通过 Python 依赖安装，各自保留其许可证。本仓库不分发这些依赖的二进制，也不包含第三方固件工具的 XOR 表或密钥工具实现。
+
+图形界面打包程序（`tools/build_gui_exe.py`）不包含 Keystone 或 Unicorn。其中的 `asm_cache.gz` 是维护者用 Keystone 汇编本项目源码得到的机器码，由 `tools/build_asm_cache.py` 生成。打包程序内置 Python、Tcl/Tk 和 PyInstaller 引导程序，发布包的 `licenses` 文件夹附有这些许可证文本。

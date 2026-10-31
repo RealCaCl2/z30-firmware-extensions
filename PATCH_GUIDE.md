@@ -4,13 +4,24 @@
 
 构建生成独立 EG 模块，不会重建完整 Nikon 更新包。维护者已确认该模块可在 Z30 C 1.20 机身安装，并已实机测试 SD 宿主与 ZMOD 加载、运行；详细验证范围见[验证说明](docs/verification.md)。
 
-## 1. 准备文件
+## 图形界面（推荐）
+
+Windows 用户不需要安装 Python：
+
+1. 从 [Releases](https://github.com/WonderLantern/wonder-lantern-z30/releases/latest) 下载 `WonderLanternZ30-windows-x64.zip`，完整解压。
+2. 把原版固件 **Z_30_0120.bin** 放进解压后的文件夹，程序会自动填入；也可以手动选择。
+3. 打开 `WonderLanternZ30.exe`，等待显示校验通过。
+4. 勾选功能，点击“开始构建”，然后到 `output` 文件夹取 **EG209020.BIN**。再次构建会自动换一个文件名。
+
+文件夹要整体保留，不能只复制 exe。需要命令行或其他系统时，继续看下面的步骤；安装依赖后也可以运行 `python patch_gui.py` 打开同一个界面。
+
+## 命令行：准备文件
 
 安装 Python 3.10 或更新版本，下载并解压本项目的完整源码。
 
 把原版固件 **Z_30_0120.bin** 放进项目文件夹，与 `patch.py` 放在一起。不要只下载 patch.py，项目中的 `src` 文件夹也需要保留。
 
-## 2. 运行命令
+## 命令行：运行命令
 
 在项目文件夹里打开 PowerShell，依次执行：
 
@@ -54,7 +65,7 @@ python patch.py full --source "Z_30_0120.bin" --output "output/EG209020.BIN"
 
 脚本调用或重定向输入时，省略预设默认 full；加 `--interactive` 可强制显示菜单。程序会检查原版固件哈希并生成 EG 模块，原始文件不会被修改。
 
-## 3. 找到生成的固件
+## 找到生成的固件
 
 看到 `Built` 和输出文件路径，表示 EG 模块构建完成。该产物的机身安装与模块宿主/ZMOD 加载运行已有实机验证；其他功能覆盖见[验证说明](docs/verification.md)。
 
@@ -65,6 +76,8 @@ python patch.py full --source "Z_30_0120.bin" --output "output/EG209020.BIN"
 
 ## 常见问题
 
+- **Windows 提示“已保护你的电脑”**：程序没有代码签名。请确认文件来自本项目 Releases 并核对 SHA-256，再决定是否运行。
+- **程序打不开或提示缺少文件**：确认已完整解压，并且没有把 exe 单独移出文件夹。
 - **找不到 python**：确认已安装 Python。Windows 下也可以把命令里的 `python` 换成 `py`。
 - **SHA-256 mismatch**：固件不匹配，请使用未经修改的原版 Z30 C 1.20。
 - **Output or report already exists**：移走 output 中之前生成的 BIN 和 JSON，再运行；程序不会覆盖旧文件。

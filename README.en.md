@@ -38,7 +38,22 @@ Sound and module menus support Simplified Chinese, Traditional Chinese, and Engl
 
 ## Quick start
 
-First-time users should read the [build guide](PATCH_GUIDE.md) (Chinese). Run these commands in PowerShell from the project root.
+### Graphical app (recommended, Windows)
+
+No Python installation or commands are needed:
+
+1. Download `WonderLanternZ30-windows-x64.zip` from [Releases](https://github.com/WonderLantern/wonder-lantern-z30/releases/latest) and **extract the whole archive**; do not run it from inside the zip.
+2. Supply an unmodified `Z_30_0120.bin` (requirements below). Put it in the extracted folder or select it in the app.
+3. Open `WonderLanternZ30.exe` and wait for the firmware check to pass. The interface switches between Chinese and English.
+4. Tick features (`full` by default) and click Build. Output goes to the `output` folder beside the app and never overwrites existing files.
+
+The app is not code-signed, so Windows SmartScreen may warn about it; you can compare it with the SHA-256 on the Release page first. It uses the same checks and patch flow as the command line, and does not connect to a camera or write to an SD card.
+
+On other systems, or to modify the source, run `python patch_gui.py` or use the command line below.
+
+### Command line
+
+See the [build guide](PATCH_GUIDE.md) (Chinese) for details. Run these commands in PowerShell from the project root.
 
 ### 1. Prepare the source and stock firmware
 

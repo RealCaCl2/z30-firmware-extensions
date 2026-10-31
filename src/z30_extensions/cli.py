@@ -40,6 +40,27 @@ def choose_presets():
             print(error)
 
 
+def build_to_files(source_path, selected, output_path, extracted_eg=False):
+    """Build one image and its report, shared by the CLI and the GUI."""
+    metadata = output_path.with_suffix('.json')
+    supplied = source_path.read_bytes()
+    source = supplied if extracted_eg else extract_eg(supplied)
+    output, report = build(source, selected)
+    report['input_kind'] = 'extracted_eg' if extracted_eg else 'stock_container'
+    if not extracted_eg:
+        report['container_sha256'] = CONTAINER_SHA256
+    # Create exclusively; never overwrite an existing image or report.
+    with metadata.open('x', encoding='utf-8', newline='\n') as f:
+        f.write(json.dumps(report, indent=2) + '\n')
+    try:
+        with output_path.open('xb') as f:
+            f.write(output)
+    except OSError:
+        metadata.unlink()
+        raise
+    return report, metadata
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('feature', nargs='*', metavar='PRESET',
@@ -64,21 +85,7 @@ def main(argv=None):
             selected = ['full']
         selected, features = resolve_presets(selected)
         print('Enabled features: ' + ', '.join(features))
-        supplied = args.source.read_bytes()
-        source = supplied if args.extracted_eg else extract_eg(supplied)
-        output, report = build(source, selected)
-        report['input_kind'] = 'extracted_eg' if args.extracted_eg else 'stock_container'
-        if not args.extracted_eg:
-            report['container_sha256'] = CONTAINER_SHA256
-        # Create exclusively; never overwrite an existing image or report.
-        with metadata.open('x', encoding='utf-8', newline='\n') as f:
-            f.write(json.dumps(report, indent=2) + '\n')
-        try:
-            with args.output.open('xb') as f:
-                f.write(output)
-        except OSError:
-            metadata.unlink()
-            raise
+        report, metadata = build_to_files(args.source, selected, args.output, args.extracted_eg)
     except (ValueError, OSError) as error:
         parser.exit(1, f'Build failed: {error}\n')
     print(f'Built {args.output}: {report["sha256"]}')

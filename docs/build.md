@@ -1,11 +1,23 @@
 # 从原始固件包构建功能扩展
 
-2026-10-20 `photo-zebra` 已纳入 `full` 默认组合，共九项功能，也可单独选择。机内照片高光显示开关默认关闭。
+2026-10-20 `photo-zebra` 已纳入 `full` 默认组合，当前共十项功能，也可单独选择。机内照片高光显示开关默认关闭。
 照片斑马纹复用原厂图案与阈值；机内独立开关及保存方式见[照片斑马纹说明](photo-zebra.md)。
 
 各功能的机身验证覆盖范围见专题文档，离线结果与硬件验证分别记录。
 
 当前用户流程只需准备原始 Z30 C 1.20 固件包和本项目 patch 程序。默认 full 包含同屏、自定义电子快门声音、M 档 900 秒曝光、MTP 加速、实验性 SD 模块宿主、视频自动方向、高码率与慢动作扩展、多画幅和照片斑马纹，不包含状态页面。
+
+## 发布 Windows 图形界面程序
+
+Keystone 为 GPLv2，其 FOSS 例外未列入 Wonder Lantern Community License，因此发布包不包含 Keystone，只附带预先汇编的机器码。维护者在项目根目录运行：
+
+```powershell
+python -m pip install '.[gui-exe]'
+python tools/build_asm_cache.py
+python tools/build_gui_exe.py
+```
+
+`build_asm_cache.py` 汇编全部 1023 种功能组合，再禁用 Keystone 重建并比对哈希，不一致时删除缓存。补丁代码改动后必须重新生成，否则受影响的组合在打包程序中会报错。结果是 `dist/WonderLanternZ30-windows-x64.zip`，已附带许可证文本。
 
 ## 运行
 
